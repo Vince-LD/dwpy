@@ -1,19 +1,23 @@
-from concurrent.futures import Future, ThreadPoolExecutor
-from enum import Enum
+from concurrent.futures import Future, ThreadPoolExecutor, wait
+from enum import Enum, IntFlag, auto
 from functools import reduce
+from itertools import repeat
+import time
 from typing import Callable, Iterable, Optional, Self
 from src.exceptions import PipelineError
 from steps import BaseStep, PipelineContext
 from steps import TestStep
 import logging
+from threading import Lock
 
 logging.basicConfig(level=logging.DEBUG)
 
-class NodeStatus(Enum):
-    UNKNOWN = 0
-    RUNNING = 1
-    FINISHED = 2
-    ERROR = 3
+
+class NodeStatus(IntFlag):
+    UNKNOWN = auto()
+    RUNNING = auto()
+    FINISHED = auto()
+    ERROR = auto()
 
 
 class PipeNode:
@@ -26,7 +30,9 @@ class PipeNode:
         self._error: Optional[PipelineError] = None
 
     def run(self, ctx: PipelineContext):
-        logging.info(f"{", ".join([n.name+ ":" + str(n.status) for n in self.depends_on])} => {self.name}")
+        logging.info(
+            f"{", ".join([n.name+ ":" + str(n.status) for n in self.depends_on])} => {self.name}"
+        )
         if not self._all_previous_finished():
             logging.info(
                 f"{self.name} cannot run yet, "
@@ -44,10 +50,10 @@ class PipeNode:
     def add_next_step(self, step: BaseStep):
         self.steps.append(step)
 
-    def add_next_node(self, node: Self):
+    def add_children_node(self, node: Self):
         self.pipes_into.add(node)
 
-    def add_dependency(self, node: Self):
+    def add_parent_node(self, node: Self):
         self.depends_on.add(node)
 
     def __str__(self) -> str:
@@ -66,152 +72,121 @@ class PipeNode:
 
 
 class Pipeline:
-    def __init__(self, start_node: Optional[PipeNode] = None) -> None:
-        self.start_node = start_node or PipeNode("Pipeline start")
+    def __init__(self, root_node: Optional[PipeNode] = None) -> None:
+        self.root_node = root_node or PipeNode("Pipeline root")
+        self.last_node = PipeNode("Pipeline end")
         self.nodes: list[PipeNode] = []
+        self._lock = Lock()
+        self._running_nodes: int = 0
 
-    def add_nodes_from(self, start_node: PipeNode, next_nodes: Iterable[PipeNode]):
-        for node in next_nodes:
-            start_node.add_next_node(node)
-            node.add_dependency(start_node)
+    def add_children_to(self, parent_node: PipeNode, child_nodes: Iterable[PipeNode]):
+        for node in child_nodes:
+            parent_node.add_children_node(node)
+            node.add_parent_node(parent_node)
             self.nodes.append(node)
 
-    def merge_nodes_into(self, start_nodes: Iterable[PipeNode], into_node: PipeNode):
-        for node in start_nodes:
-            node.add_next_node(into_node)
-            into_node.add_dependency(node)
+    def add_parents_to(self, parent_nodes: Iterable[PipeNode], into_node: PipeNode):
+        for node in parent_nodes:
+            node.add_children_node(into_node)
+            into_node.add_parent_node(node)
             self.nodes.append(into_node)
 
-    def run(self, ctx: PipelineContext):
-        self._run(ctx, (self.start_node,))
-
-    def _run(self, ctx: PipelineContext, nodes: Iterable[PipeNode]):
-        futures: list[Future[None]] = []
-        next_nodes: set[PipeNode] = set()
+    def execute(self, ctx: PipelineContext):
+        self.running_nodes = len(self.nodes)
         with ThreadPoolExecutor(max_workers=ctx.thread_count) as executor:
-            for node in nodes:
-                if node.status is not NodeStatus.UNKNOWN:
-                    continue
-                next_nodes.update(node.pipes_into)
-                futures.append(executor.submit(node.run, ctx))
-        results = [f.result() for f in futures]
+            self._parse_run(ctx, self.root_node, executor)
+            while self.running_nodes > 0:
+                time.sleep(1)
 
-        # for node in next_nodes:
-        if next_nodes:
-            self._run(ctx, next_nodes)
+    def _parse_run(
+        self, ctx: PipelineContext, node: PipeNode, executor: ThreadPoolExecutor
+    ):
+        if node.status is not NodeStatus.UNKNOWN:
+            return
+        node.run(ctx)
+        self.running_nodes -= 1
+        executor.map(self._parse_run, repeat(ctx), node.pipes_into, repeat(executor))
+
+    @property
+    def running_nodes(self) -> int:
+        with self._lock:
+            return self._running_nodes
+
+    @running_nodes.setter
+    def running_nodes(self, value: int):
+        with self._lock:
+            self._running_nodes = value
 
     def build(self):
         pass
 
 
-class Step0(TestStep):
+class Step1(TestStep):
     NAME = "1st step"
 
 
-class Step1(TestStep):
+class Step2(TestStep):
     NAME = "2nd step"
 
 
-#    def run(self, ctx: PipelineContext):
-#        self.exec_cmd(["dir"])
-
-
-class Step2(TestStep):
+class Step3(TestStep):
     NAME = "3rd step"
 
 
-#    def run(self, ctx: PipelineContext):
-#        self.exec_cmd(["dir"])
-
-
-class Step3(TestStep):
+class Step4(TestStep):
     NAME = "4th step"
 
 
-#    def run(self, ctx: PipelineContext):
-#        self.exec_cmd(["dir"])
-
-
-class Step4(TestStep):
+class Step5(TestStep):
     NAME = "5th step"
 
 
-#    def run(self, ctx: PipelineContext):
-#        self.exec_cmd(["dir"])
-
-
-class Step5(TestStep):
+class Step6(TestStep):
     NAME = "6th step"
 
 
-#    def run(self, ctx: PipelineContext):
-#        self.exec_cmd(["dir"])
-
-
-class Step6(TestStep):
+class Step7(TestStep):
     NAME = "7th step"
 
 
-#    def run(self, ctx: PipelineContext):
-#        self.exec_cmd(["dir"])
-
-
-class Step7(TestStep):
+class Step8(TestStep):
     NAME = "8th step"
 
 
-#    def run(self, ctx: PipelineContext):
-#        self.exec_cmd(["dir"])
-
-
-class Step8(TestStep):
-    NAME = "9th step"
-
-
-#    def run(self, ctx: PipelineContext):
-#        self.exec_cmd(["dir"])
-
-
 class Step9(TestStep):
-    NAME = "10th step"
+    NAME = "9th step"
 
 
 class Step10(TestStep):
     NAME = "10th step"
 
 
+class Step11(TestStep):
+    NAME = "10th step"
+
+
 if __name__ == "__main__":
     pipeline = Pipeline()
-    
-    node0 = pipeline.start_node
+
+    node0 = pipeline.root_node
 
     node1 = PipeNode("Node 1")
-    node1.add_next_step(Step0())
-    # node1.add_next_step(Step1())
-    # node1.add_next_step(Step2())
+    node1.add_next_step(Step1())
 
     node2 = PipeNode("Node 2")
-    node2.add_next_step(Step3())
+    node2.add_next_step(Step2())
 
     node3 = PipeNode("Node 3")
-    node3.add_next_step(Step4())
-    
+    node3.add_next_step(Step3())
+
     node4 = PipeNode("Node 4")
-    node4.add_next_step(Step5())
-    # node4.add_next_step(Step6())
-    # node4.add_next_step(Step7())
-    # node4.add_next_step(Step8())
+    node4.add_next_step(Step4())
 
     node5 = PipeNode("Node 5")
-    node5.add_next_step(Step9())
-    
-    
-    # node3 = PipeNode("Split Branch")
-    # node2.add_next_step(Step8())
+    node5.add_next_step(Step5())
 
-    # node3 = PipeNode("Split Branch")
-    pipeline.add_nodes_from(node0, (node1, node2))
-    pipeline.add_nodes_from(node2, (node3, node4))
-    pipeline.merge_nodes_into((node1, node3, node4), node5)
+    pipeline.add_children_to(node0, (node1, node2))
+    pipeline.add_children_to(node2, (node3, node4))
+    pipeline.add_parents_to((node1, node3, node4), node5)
 
-    pipeline.run(PipelineContext())
+    pipeline.execute(PipelineContext())
