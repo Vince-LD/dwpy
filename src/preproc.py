@@ -6,10 +6,12 @@ from itertools import repeat
 import time
 from typing import Callable, Iterable, Optional, Self
 from src.exceptions import CommandFailed, PipelineError
+from src.steps.base_step import RootStep
 from steps import BaseStep, PipelineContext
 from steps import TestStep
 import logging
 from threading import Lock
+import graphviz
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -27,19 +29,19 @@ class PipeNode:
     def __init__(self, name="") -> None:
         self.name = name
         self.steps: list[BaseStep] = []
-        self.depends_on: set[PipeNode] = set()
-        self.pipes_into: set[PipeNode] = set()
+        self.parent_nodes: set[PipeNode] = set()
+        self.child_nodes: set[PipeNode] = set()
         self._status = NodeStatus.UNKNOWN
         self._error: Optional[BaseException] = None
 
     def run(self, ctx: PipelineContext):
         logging.info(
-            f"{", ".join([n.name+ ":" + str(n.status) for n in self.depends_on])} => {self.name}"
+            f"{", ".join([n.name+ ":" + str(n.status) for n in self.parent_nodes])} => {self.name}"
         )
         if not self._all_previous_finished():
             logging.info(
                 f"{self.name} cannot run yet, "
-                f"{", ".join([n.name+ ":" + str(n.status) for n in self.depends_on])}"
+                f"{", ".join([n.name+ ":" + str(n.status) for n in self.parent_nodes])}"
             )
             return
         try:
@@ -51,14 +53,14 @@ class PipeNode:
             return
         self._status = NodeStatus.FINISHED
 
-    def add_next_step(self, step: BaseStep):
+    def add_step(self, step: BaseStep):
         self.steps.append(step)
 
     def add_children_node(self, node: Self):
-        self.pipes_into.add(node)
+        self.child_nodes.add(node)
 
     def add_parent_node(self, node: Self):
-        self.depends_on.add(node)
+        self.parent_nodes.add(node)
 
     def __str__(self) -> str:
         return f"{' -> '.join([step.__class__.__name__ for step in self.steps])}"
@@ -66,9 +68,17 @@ class PipeNode:
     def _all_previous_finished(self) -> bool:
         return reduce(
             lambda bool_, node: bool_ and bool(node.status & NODE_PASSED),
-            self.depends_on,
+            self.parent_nodes,
             True,
         )
+    
+    @property
+    def first_step(self):
+        return self.steps[0]
+    
+    @property
+    def last_step(self):
+        return self.steps[-1]
 
     @property
     def status(self) -> NodeStatus:
@@ -77,6 +87,15 @@ class PipeNode:
     @property
     def error(self) -> Optional[BaseException]:
         return self._error
+
+    def preview(self, graph: graphviz.Digraph) -> graphviz.Digraph:
+        sg = graphviz.Digraph(f"cluster_{self.name}")
+        if self.steps:
+            for prev_id, step in enumerate(self.steps[1:]):
+                sg.edge(self.steps[prev_id].name, step.name)
+        sg.attr(label=self.name)
+        graph.subgraph(sg)
+        return graph
 
 class Pipeline:
     def __init__(self, root_node: Optional[PipeNode] = None) -> None:
@@ -123,7 +142,7 @@ class Pipeline:
             self.runtime_error = node.error
             return 
         
-        executor.map(self._parse_run, repeat(ctx), node.pipes_into, repeat(executor))
+        executor.map(self._parse_run, repeat(ctx), node.child_nodes, repeat(executor))
 
     @property
     def remaining_nodes(self) -> int:
@@ -154,6 +173,25 @@ class Pipeline:
 
     def build(self):
         pass
+
+    def preview(self) -> graphviz.Digraph:
+        graph = graphviz.Digraph("Pipeline", filename="./test.svg", strict=True)
+        graph.attr(compound='true')
+        if not self.root_node.steps:
+            self.root_node.add_step(RootStep())
+        self._preview(self.root_node, graph)
+        self._link(self.root_node, graph)
+        return graph
+    
+    def _preview(self, node: PipeNode, graph: graphviz.Digraph):
+        node.preview(graph)
+        for child_node in node.child_nodes:
+            self._preview(child_node, graph)
+
+    def _link(self, node: PipeNode, graph: graphviz.Digraph):
+        for child_node in node.child_nodes:
+            graph.edge(f"{node.last_step.name}", f"{child_node.first_step.name}", ltail=node.name, lhead=child_node.name)
+            self._link(child_node, graph)
 
 
 class Step1(TestStep):
@@ -210,22 +248,30 @@ if __name__ == "__main__":
     node0 = pipeline.root_node
 
     node1 = PipeNode("Node 1")
-    node1.add_next_step(Step1())
+    node1.add_step(Step1("A"))
+    node1.add_step(Step2("B"))
 
     node2 = PipeNode("Node 2")
-    node2.add_next_step(Step2())
+    node2.add_step(Step2("C"))
+    node2.add_step(Step2("D"))
 
     node3 = PipeNode("Node 3")
-    node3.add_next_step(Step3())
+    node3.add_step(Step3("E"))
+    node3.add_step(Step3("F"))
 
     node4 = PipeNode("Node 4")
-    node4.add_next_step(Step4())
+    node4.add_step(Step4("G"))
+    node4.add_step(Step4("H"))
 
     node5 = PipeNode("Node 5")
-    node5.add_next_step(Step5())
+    node5.add_step(Step5("I"))
+    node5.add_step(Step5("J"))
 
     pipeline.add_children_to(node0, (node1, node2))
     pipeline.add_children_to(node2, (node3, node4))
     pipeline.add_parents_to((node1, node3, node4), node5)
 
-    pipeline.execute(PipelineContext())
+    # pipeline.execute(PipelineContext())
+
+    g = pipeline.preview()
+    g.view()

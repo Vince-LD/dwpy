@@ -1,5 +1,6 @@
 import shlex
 import time
+from typing import Optional
 
 from exceptions import CommandFailed
 from .base_step import BaseStep, PipelineContext
@@ -10,8 +11,8 @@ import logging
 class TestStep(BaseStep):
     NAME = "test Step"
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, name: Optional[str]=None) -> None:
+        super().__init__(name)
 
     def run(self, ctx: PipelineContext):
         # print(ctx.input_dwi)
