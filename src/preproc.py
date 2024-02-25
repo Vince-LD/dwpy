@@ -1,10 +1,11 @@
 from concurrent.futures import Future, ThreadPoolExecutor, wait
-from enum import Enum, IntFlag, auto
+from enum import Enum, IntFlag, auto, Flag
+
 from functools import reduce
 from itertools import repeat
 import time
 from typing import Callable, Iterable, Optional, Self
-from src.exceptions import PipelineError
+from src.exceptions import CommandFailed, PipelineError
 from steps import BaseStep, PipelineContext
 from steps import TestStep
 import logging
@@ -13,12 +14,14 @@ from threading import Lock
 logging.basicConfig(level=logging.DEBUG)
 
 
-class NodeStatus(IntFlag):
+class NodeStatus(Flag):
     UNKNOWN = auto()
     RUNNING = auto()
     FINISHED = auto()
+    SKIPPED = auto()
     ERROR = auto()
 
+NODE_PASSED = NodeStatus.FINISHED | NodeStatus.ERROR
 
 class PipeNode:
     def __init__(self, name="") -> None:
@@ -27,7 +30,7 @@ class PipeNode:
         self.depends_on: set[PipeNode] = set()
         self.pipes_into: set[PipeNode] = set()
         self._status = NodeStatus.UNKNOWN
-        self._error: Optional[PipelineError] = None
+        self._error: Optional[BaseException] = None
 
     def run(self, ctx: PipelineContext):
         logging.info(
@@ -42,9 +45,10 @@ class PipeNode:
         try:
             for step in self.steps:
                 step.run(ctx)
-        except PipelineError as e:
+        except BaseException as e:
             self._error = e
             self._status = NodeStatus.ERROR
+            return
         self._status = NodeStatus.FINISHED
 
     def add_next_step(self, step: BaseStep):
@@ -61,7 +65,7 @@ class PipeNode:
 
     def _all_previous_finished(self) -> bool:
         return reduce(
-            lambda bool_, node: bool_ and node.status is NodeStatus.FINISHED,
+            lambda bool_, node: bool_ and bool(node.status & NODE_PASSED),
             self.depends_on,
             True,
         )
@@ -70,6 +74,9 @@ class PipeNode:
     def status(self) -> NodeStatus:
         return self._status
 
+    @property
+    def error(self) -> Optional[BaseException]:
+        return self._error
 
 class Pipeline:
     def __init__(self, root_node: Optional[PipeNode] = None) -> None:
@@ -100,6 +107,8 @@ class Pipeline:
             self._parse_run(ctx, self.root_node, executor)
             while self._keep_running():
                 time.sleep(1)
+        if self.runtime_error is not None:
+            logging.exception(self.runtime_error)
 
     def _parse_run(
         self, ctx: PipelineContext, node: PipeNode, executor: ThreadPoolExecutor
@@ -107,14 +116,13 @@ class Pipeline:
         if node.status is not NodeStatus.UNKNOWN:
             return
         
-        try:
-            self.running_nodes += 1
-            node.run(ctx)
-            self.running_nodes -= 1
-            self.remaining_nodes -= 1
-        except BaseException as e:
-            self.runtime_error = e
-            
+        node.run(ctx)
+        self.remaining_nodes -= 1
+        
+        if node.status is NodeStatus.ERROR:
+            self.runtime_error = node.error
+            return 
+        
         executor.map(self._parse_run, repeat(ctx), node.pipes_into, repeat(executor))
 
     @property
@@ -127,21 +135,21 @@ class Pipeline:
         with self._lock:
             self._remaining_nodes = value
 
-    @property
-    def running_nodes(self) -> int:
-        with self._lock:
-            return self._running_nodes
+    # @property
+    # def running_nodes(self) -> int:
+    #     with self._lock:
+    #         return self._running_nodes
 
-    @running_nodes.setter
-    def running_nodes(self, value: int):
-        with self._lock:
-            self._running_nodes = value
+    # @running_nodes.setter
+    # def running_nodes(self, value: int):
+    #     with self._lock:
+    #         self._running_nodes = value
 
     def _keep_running(self):
         return (
             self.remaining_nodes > 0
             and self.runtime_error is None
-            and self.running_nodes > 0
+            # and self.running_nodes > 0
         )
 
     def build(self):
@@ -154,6 +162,10 @@ class Step1(TestStep):
 
 class Step2(TestStep):
     NAME = "2nd step"
+    def run(self, ctx: PipelineContext):
+        super().run(ctx)
+        print("ERROR SHOULD BE RAISED")
+        raise CommandFailed("FAILED", 1)
 
 
 class Step3(TestStep):
