@@ -4,7 +4,7 @@ from enum import Enum, IntFlag, auto, Flag
 from functools import reduce
 from itertools import repeat
 import time
-from typing import Callable, Iterable, Optional, Self
+from typing import Any, Callable, Iterable, Optional, Self
 from src.exceptions import CommandFailed, PipelineError
 from src.steps.base_step import RootStep
 from steps import BaseStep, PipelineContext
@@ -23,9 +23,19 @@ class NodeStatus(Flag):
     SKIPPED = auto()
     ERROR = auto()
 
-NODE_PASSED = NodeStatus.FINISHED | NodeStatus.ERROR
+
+NODE_PASSED = NodeStatus.FINISHED | NodeStatus.SKIPPED
+
 
 class PipeNode:
+    styles: dict[NodeStatus, dict[str, str]] = {
+        NodeStatus.UNKNOWN: {"shape": "ellipse", "color": "black"},
+        NodeStatus.RUNNING: {"shape": "box", "color": "blue"},
+        NodeStatus.FINISHED: {"shape": "box", "color": "green"},
+        NodeStatus.SKIPPED: {"shape": "box", "color": "grey"},
+        NodeStatus.ERROR: {"shape": "box", "color": "red"},
+    }
+
     def __init__(self, name="") -> None:
         self.name = name
         self.steps: list[BaseStep] = []
@@ -71,11 +81,11 @@ class PipeNode:
             self.parent_nodes,
             True,
         )
-    
+
     @property
     def first_step(self):
         return self.steps[0]
-    
+
     @property
     def last_step(self):
         return self.steps[-1]
@@ -88,17 +98,31 @@ class PipeNode:
     def error(self) -> Optional[BaseException]:
         return self._error
 
-    def preview(self, graph: graphviz.Digraph) -> graphviz.Digraph:
+    def view(self, graph: graphviz.Digraph, preview=True) -> graphviz.Digraph:
         sg = graphviz.Digraph(f"cluster_{self.name}")
         if self.steps:
             for prev_id, step in enumerate(self.steps[1:]):
                 sg.edge(self.steps[prev_id].name, step.name)
+        if not preview:
+            sg.node_attr.update(**self.styles[self.status])
         sg.attr(label=self.name)
         graph.subgraph(sg)
+        if self.parent_nodes:
+            for p in self.parent_nodes:
+                graph.edge(
+                    f"{p.last_step.name}",
+                    f"{self.first_step.name}",
+                    ltail=f"cluster_{p.name}",
+                    lhead=f"cluster_{self.name}",
+                )
         return graph
 
+
 class Pipeline:
-    def __init__(self, root_node: Optional[PipeNode] = None) -> None:
+    def __init__(
+        self, name: str = "Pipeline", root_node: Optional[PipeNode] = None
+    ) -> None:
+        self.name = name
         self.root_node = root_node or PipeNode("Pipeline root")
         self.last_node = PipeNode("Pipeline end")
         self.nodes: list[PipeNode] = []
@@ -119,12 +143,13 @@ class Pipeline:
             into_node.add_parent_node(node)
             self.nodes.append(into_node)
 
-    def execute(self, ctx: PipelineContext):
+    def execute(self, ctx: PipelineContext, with_graph: bool = True):
         self.remaining_nodes = len(self.nodes)
         self.running_nodes = 0
         with ThreadPoolExecutor(max_workers=ctx.thread_count) as executor:
             self._parse_run(ctx, self.root_node, executor)
             while self._keep_running():
+                print("keep_running")
                 time.sleep(1)
         if self.runtime_error is not None:
             logging.exception(self.runtime_error)
@@ -134,15 +159,19 @@ class Pipeline:
     ):
         if node.status is not NodeStatus.UNKNOWN:
             return
-        
         node.run(ctx)
         self.remaining_nodes -= 1
-        
+
         if node.status is NodeStatus.ERROR:
             self.runtime_error = node.error
-            return 
-        
-        executor.map(self._parse_run, repeat(ctx), node.child_nodes, repeat(executor))
+            return
+
+        executor.map(
+            self._parse_run,
+            repeat(ctx),
+            node.child_nodes,
+            repeat(executor),
+        )
 
     @property
     def remaining_nodes(self) -> int:
@@ -165,32 +194,37 @@ class Pipeline:
     #         self._running_nodes = value
 
     def _keep_running(self):
+        print(self.remaining_nodes, self.runtime_error)
         return (
-            self.remaining_nodes > 0
-            and self.runtime_error is None
+            self.remaining_nodes > 0 and self.runtime_error is None
             # and self.running_nodes > 0
         )
 
     def build(self):
         pass
 
-    def preview(self) -> graphviz.Digraph:
-        graph = graphviz.Digraph("Pipeline", filename="./test.svg", strict=True)
-        graph.attr(compound='true')
+    def view(self, preview=True) -> graphviz.Digraph:
+        pipeline_name = f"{self.name}_preview" if preview else self.name
+        graph = graphviz.Digraph(pipeline_name, strict=True)
+        graph.attr(compound="true")
         if not self.root_node.steps:
             self.root_node.add_step(RootStep())
-        self._preview(self.root_node, graph)
-        self._link(self.root_node, graph)
+        self._view(self.root_node, graph, preview)
         return graph
-    
-    def _preview(self, node: PipeNode, graph: graphviz.Digraph):
-        node.preview(graph)
+
+    def _view(self, node: PipeNode, graph: graphviz.Digraph, preview: bool):
+        node.view(graph, preview)
         for child_node in node.child_nodes:
-            self._preview(child_node, graph)
+            self._view(child_node, graph, preview)
 
     def _link(self, node: PipeNode, graph: graphviz.Digraph):
         for child_node in node.child_nodes:
-            graph.edge(f"{node.last_step.name}", f"{child_node.first_step.name}", ltail=node.name, lhead=child_node.name)
+            graph.edge(
+                f"{node.last_step.name}",
+                f"{child_node.first_step.name}",
+                ltail=node.name,
+                lhead=child_node.name,
+            )
             self._link(child_node, graph)
 
 
@@ -200,10 +234,6 @@ class Step1(TestStep):
 
 class Step2(TestStep):
     NAME = "2nd step"
-    def run(self, ctx: PipelineContext):
-        super().run(ctx)
-        print("ERROR SHOULD BE RAISED")
-        raise CommandFailed("FAILED", 1)
 
 
 class Step3(TestStep):
@@ -212,6 +242,11 @@ class Step3(TestStep):
 
 class Step4(TestStep):
     NAME = "4th step"
+
+    def run(self, ctx: PipelineContext):
+        super().run(ctx)
+        print("ERROR SHOULD BE RAISED")
+        raise CommandFailed("FAILED", 1)
 
 
 class Step5(TestStep):
@@ -249,7 +284,7 @@ if __name__ == "__main__":
 
     node1 = PipeNode("Node 1")
     node1.add_step(Step1("A"))
-    node1.add_step(Step2("B"))
+    node1.add_step(Step1("B"))
 
     node2 = PipeNode("Node 2")
     node2.add_step(Step2("C"))
@@ -271,7 +306,10 @@ if __name__ == "__main__":
     pipeline.add_children_to(node2, (node3, node4))
     pipeline.add_parents_to((node1, node3, node4), node5)
 
-    # pipeline.execute(PipelineContext())
-
-    g = pipeline.preview()
-    g.view()
+    pipeline.execute(PipelineContext())
+    g1 = pipeline.view(True)
+    g1.view()
+    g2 = pipeline.view(False)
+    g2.view()
+    # g = pipeline.preview()
+    # g.view()
