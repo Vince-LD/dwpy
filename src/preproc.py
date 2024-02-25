@@ -77,7 +77,9 @@ class Pipeline:
         self.last_node = PipeNode("Pipeline end")
         self.nodes: list[PipeNode] = []
         self._lock = Lock()
+        self._remaining_nodes: int = 0
         self._running_nodes: int = 0
+        self.runtime_error: Optional[BaseException] = None
 
     def add_children_to(self, parent_node: PipeNode, child_nodes: Iterable[PipeNode]):
         for node in child_nodes:
@@ -92,10 +94,11 @@ class Pipeline:
             self.nodes.append(into_node)
 
     def execute(self, ctx: PipelineContext):
-        self.running_nodes = len(self.nodes)
+        self.remaining_nodes = len(self.nodes)
+        self.running_nodes = 0
         with ThreadPoolExecutor(max_workers=ctx.thread_count) as executor:
             self._parse_run(ctx, self.root_node, executor)
-            while self.running_nodes > 0:
+            while self._keep_running():
                 time.sleep(1)
 
     def _parse_run(
@@ -103,9 +106,26 @@ class Pipeline:
     ):
         if node.status is not NodeStatus.UNKNOWN:
             return
-        node.run(ctx)
-        self.running_nodes -= 1
+        
+        try:
+            self.running_nodes += 1
+            node.run(ctx)
+            self.running_nodes -= 1
+            self.remaining_nodes -= 1
+        except BaseException as e:
+            self.runtime_error = e
+            
         executor.map(self._parse_run, repeat(ctx), node.pipes_into, repeat(executor))
+
+    @property
+    def remaining_nodes(self) -> int:
+        with self._lock:
+            return self._remaining_nodes
+
+    @remaining_nodes.setter
+    def remaining_nodes(self, value: int):
+        with self._lock:
+            self._remaining_nodes = value
 
     @property
     def running_nodes(self) -> int:
@@ -116,6 +136,13 @@ class Pipeline:
     def running_nodes(self, value: int):
         with self._lock:
             self._running_nodes = value
+
+    def _keep_running(self):
+        return (
+            self.remaining_nodes > 0
+            and self.runtime_error is None
+            and self.running_nodes > 0
+        )
 
     def build(self):
         pass
