@@ -29,11 +29,11 @@ NODE_PASSED = NodeStatus.FINISHED | NodeStatus.SKIPPED
 
 class PipeNode:
     styles: dict[NodeStatus, dict[str, str]] = {
-        NodeStatus.UNKNOWN: {"shape": "ellipse", "color": "black"},
+        NodeStatus.UNKNOWN: {"shape": "ellipse", "color": "black", "style": "dashed"},
         NodeStatus.RUNNING: {"shape": "box", "color": "blue"},
-        NodeStatus.FINISHED: {"shape": "box", "color": "green"},
-        NodeStatus.SKIPPED: {"shape": "box", "color": "grey"},
-        NodeStatus.ERROR: {"shape": "box", "color": "red"},
+        NodeStatus.FINISHED: {"shape": "invhouse", "color": "green"},
+        NodeStatus.SKIPPED: {"shape": "invhouse", "color": "grey"},
+        NodeStatus.ERROR: {"shape": "house", "color": "red"},
     }
 
     def __init__(self, name="") -> None:
@@ -43,6 +43,7 @@ class PipeNode:
         self.child_nodes: set[PipeNode] = set()
         self._status = NodeStatus.UNKNOWN
         self._error: Optional[BaseException] = None
+        self._id = id(self)
 
     def run(self, ctx: PipelineContext):
         logging.info(
@@ -98,22 +99,30 @@ class PipeNode:
     def error(self) -> Optional[BaseException]:
         return self._error
 
+    @property
+    def id(self) -> int:
+        return self._id
+
     def view(self, graph: graphviz.Digraph, preview=True) -> graphviz.Digraph:
-        sg = graphviz.Digraph(f"cluster_{self.name}")
-        if self.steps:
-            for prev_id, step in enumerate(self.steps[1:]):
-                sg.edge(self.steps[prev_id].name, step.name)
-        if not preview:
-            sg.node_attr.update(**self.styles[self.status])
+        sg = graphviz.Digraph(f"cluster_{self._id}")
         sg.attr(label=self.name)
+        attrs = self.styles[self.status] if not preview else {}
+        
+        if self.steps:
+            sg.node(self.first_step.name, **attrs)
+            for prev_id, step in enumerate(self.steps[1:]):
+                sg.node(step.name, **attrs)
+                sg.edge(self.steps[prev_id].name, step.name)
+
+
         graph.subgraph(sg)
         if self.parent_nodes:
             for p in self.parent_nodes:
                 graph.edge(
                     f"{p.last_step.name}",
                     f"{self.first_step.name}",
-                    ltail=f"cluster_{p.name}",
-                    lhead=f"cluster_{self.name}",
+                    ltail=f"cluster_{p.id}",
+                    lhead=f"cluster_{self._id}",
                 )
         return graph
 
@@ -295,7 +304,7 @@ if __name__ == "__main__":
     node3.add_step(Step3("F"))
 
     node4 = PipeNode("Node 4")
-    node4.add_step(Step4("G"))
+    node4.add_step(Step2("G"))
     node4.add_step(Step4("H"))
 
     node5 = PipeNode("Node 5")
@@ -307,8 +316,8 @@ if __name__ == "__main__":
     pipeline.add_parents_to((node1, node3, node4), node5)
 
     pipeline.execute(PipelineContext())
-    g1 = pipeline.view(True)
-    g1.view()
+    # g1 = pipeline.view(True)
+    # g1.view()
     g2 = pipeline.view(False)
     g2.view()
     # g = pipeline.preview()
