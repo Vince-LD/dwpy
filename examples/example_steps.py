@@ -2,8 +2,8 @@ import shlex
 import time
 from typing import Optional
 
-from exceptions import CommandFailed
-from .base_step import BaseStep, PipelineContext
+from pipelyne.exceptions import CommandFailed
+from pipelyne.base_step import BaseStep, BasePipelineContext
 import subprocess
 import logging
 
@@ -11,14 +11,13 @@ import logging
 class TestStep(BaseStep):
     NAME = "test Step"
 
-    def __init__(self, name: Optional[str]=None) -> None:
-        super().__init__(name)
+    def __init__(self, name: Optional[str]=None, comment: str = "") -> None:
+        super().__init__(name, comment)
 
-    def run(self, ctx: PipelineContext):
-        # print(ctx.input_dwi)
-        logging.info(f"{self.NAME} running...")
-        time.sleep(1)
-        logging.info(f"{self.NAME} finished...")
+    def run(self, ctx: BasePipelineContext):
+        with ctx:
+            logging.info(f"{self.name} do something")
+        self.complete()
 
     def exec_cmd(self, cmd: list[str]):
         # _cmd = shlex.join(cmd)

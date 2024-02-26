@@ -1,6 +1,6 @@
 from typing import Callable
 
-from src.steps.base_step import BaseStep
+from pipelyne.base_step import BaseStep
 
 def log_step(step: BaseStep):
     print(step)
