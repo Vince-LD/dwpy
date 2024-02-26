@@ -4,9 +4,8 @@ from functools import reduce
 from itertools import repeat
 import time
 from typing import Iterable, Optional, Self
-from pipelyne.base_step import RootStep
-from base_step import BaseStep, StatusEnum, STATUS_PASSED
-from context import BasePipelineContext
+from pipelyne.base_step import RootStep, BaseStep, StatusEnum, STATUS_PASSED
+from pipelyne.context import BasePipelineContext
 import logging
 from threading import Lock
 import graphviz
@@ -142,13 +141,13 @@ class Pipelyne:
             node.add_parent_node(parent_node)
             self.nodes.append(node)
 
-    def add_parents_to(self, parent_nodes: Iterable[PipeNode], into_node: PipeNode):
+    def add_parents_to(self, child_node: PipeNode, parent_nodes: Iterable[PipeNode],):
         for node in parent_nodes:
-            node.add_children_node(into_node)
-            into_node.add_parent_node(node)
-            self.nodes.append(into_node)
+            node.add_children_node(child_node)
+            child_node.add_parent_node(node)
+            self.nodes.append(child_node)
 
-    def execute(self, ctx: BasePipelineContext, with_graph: bool = True):
+    def execute(self, ctx: BasePipelineContext):
         self.remaining_nodes = len(self.nodes)
         self.running_nodes = 0
         with ThreadPoolExecutor(max_workers=ctx.thread_count) as executor:
@@ -208,17 +207,17 @@ class Pipelyne:
     def build(self):
         pass
 
-    def view(self, preview=True) -> graphviz.Digraph:
+    def graph(self, preview=True) -> graphviz.Digraph:
         pipeline_name = f"{self.name}_preview" if preview else self.name
         graph = graphviz.Digraph(pipeline_name, strict=True )
-        graph.attr(compound="true", splines="curved", ranksep="2", nodesep="0.5")
-        self._view(self.root_node, graph)
+        graph.attr(compound="true", splines="curved")
+        self._graph(self.root_node, graph)
         return graph
 
-    def _view(self, node: PipeNode, graph: graphviz.Digraph):
+    def _graph(self, node: PipeNode, graph: graphviz.Digraph):
         node.view(graph)
         for child_node in node.child_nodes:
-            self._view(child_node, graph)
+            self._graph(child_node, graph)
 
     def _link(self, node: PipeNode, graph: graphviz.Digraph):
         for child_node in node.child_nodes:

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Generic
 from enum import Flag, auto
-from context import BasePipelineContext
+from pipelyne.context import ContextT
 
 
 class StatusEnum(Flag):
@@ -15,7 +15,7 @@ class StatusEnum(Flag):
 STATUS_PASSED = StatusEnum.COMPLETE | StatusEnum.SKIPPED
 
 
-class BaseStep(ABC):
+class BaseStep(ABC, Generic[ContextT]):
     NAME = "Base Step"
     STYLES: dict[StatusEnum, dict[str, str]] = {
         StatusEnum.UNKNOWN: {"shape": "box", "color": "black", "style": "dashed"},
@@ -36,7 +36,7 @@ class BaseStep(ABC):
         self._str_id = str(self._id)
 
     @abstractmethod
-    def run(self, ctx: BasePipelineContext):
+    def run(self, ctx: ContextT):
         self.complete()
 
     @property
@@ -70,13 +70,16 @@ class BaseStep(ABC):
         return self.STYLES.get(self._status, self.DEFAULT_STYLE)
 
     def label(self) -> str:
-        return f"{self.name}{'\n' if self.comment else ''}{self.comment}"
+        return (
+            f"{self.__class__.__name__}: {self.name}"
+            f"{'\n' if self.comment else ''}{self.comment}"
+            )
 
 
-class RootStep(BaseStep):
+class RootStep(BaseStep[ContextT]):
     NAME = "Start"
     STYLES = {}
     DEFAULT_STYLE = {"shape": "diamond", "color": "blue"}
 
-    def run(self, ctx: BasePipelineContext):
-        self.complete()
+    def run(self, ctx: ContextT):
+        self.skipped()
