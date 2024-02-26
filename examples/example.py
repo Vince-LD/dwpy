@@ -3,7 +3,7 @@ from example_utils import ExampleContext, AddStep, MutliplyStep, LogStep, SkipSt
 
 
 def main():
-    pipeline = Pipelyne("Example Pipeline")
+    pipeline = Pipelyne(ExampleContext, "Example Pipeline")
 
 
     node1 = PipeNode("Process node 1")
@@ -64,7 +64,7 @@ def main():
         )
     )
 
-    node6 = PipeNode("Process node ")
+    node6 = PipeNode("Final process node")
     node6.add_step(
         MutliplyStep(
             x_field="result_step3",
@@ -84,8 +84,9 @@ def main():
     pipeline.add_children_to(node2, (node3, node4))
     pipeline.add_parents_to(node5, (node3, node4))
     pipeline.add_parents_to(node6, (node5, node1))
-
-    context = ExampleContext()
+    pipeline.connect_final_node()
+    
+    context = ExampleContext(input_x=1.5, input_y=8)
     pipeline.execute(context)
     graph = pipeline.graph()
     graph.view()

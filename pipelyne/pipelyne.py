@@ -4,8 +4,8 @@ from functools import reduce
 from itertools import repeat
 import time
 from typing import Iterable, Optional, Self
-from pipelyne.base_step import RootStep, BaseStep, StatusEnum, STATUS_PASSED
-from pipelyne.context import BasePipelineContext
+from pipelyne.base_step import FinalStep, RootStep, BaseStep, StatusEnum, STATUS_PASSED
+from pipelyne.context import BasePipelineContext, ContextT
 import logging
 from threading import Lock
 import graphviz
@@ -48,7 +48,7 @@ class PipeNode:
     def add_step(self, step: BaseStep):
         self.steps.append(step)
 
-    def add_children_node(self, node: Self):
+    def add_child_node(self, node: Self):
         self.child_nodes.add(node)
 
     def add_parent_node(self, node: Self):
@@ -119,14 +119,19 @@ class PipeNode:
 
 class Pipelyne:
     def __init__(
-        self, name: str = "Pipeline", root_node: Optional[PipeNode] = None
+        self,
+        context_class: type[ContextT],
+        name: str = "Pipeline",
+
     ) -> None:
         self.name = name
-        if root_node is None:
-            self.root_node = PipeNode(self.name)
-            self.root_node.add_step(RootStep())
-        else:
-            self.root_node = root_node
+
+    
+        self.root_node = PipeNode(self.name)
+        self.root_node.add_step(RootStep(context_class))
+
+        self.final_node = PipeNode("")
+        self.final_node.add_step(FinalStep(context_class))
 
         self.last_node = PipeNode("Pipeline end")
         self.nodes: list[PipeNode] = []
@@ -137,13 +142,17 @@ class Pipelyne:
 
     def add_children_to(self, parent_node: PipeNode, child_nodes: Iterable[PipeNode]):
         for node in child_nodes:
-            parent_node.add_children_node(node)
+            parent_node.add_child_node(node)
             node.add_parent_node(parent_node)
             self.nodes.append(node)
 
-    def add_parents_to(self, child_node: PipeNode, parent_nodes: Iterable[PipeNode],):
+    def add_parents_to(
+        self,
+        child_node: PipeNode,
+        parent_nodes: Iterable[PipeNode],
+    ):
         for node in parent_nodes:
-            node.add_children_node(child_node)
+            node.add_child_node(child_node)
             child_node.add_parent_node(node)
             self.nodes.append(child_node)
 
@@ -157,7 +166,7 @@ class Pipelyne:
                 time.sleep(1)
         if self.runtime_error is not None:
             logging.exception(self.runtime_error)
-
+        
     def _parse_run(
         self, ctx: BasePipelineContext, node: PipeNode, executor: ThreadPoolExecutor
     ):
@@ -209,7 +218,7 @@ class Pipelyne:
 
     def graph(self, preview=True) -> graphviz.Digraph:
         pipeline_name = f"{self.name}_preview" if preview else self.name
-        graph = graphviz.Digraph(pipeline_name, strict=True )
+        graph = graphviz.Digraph(pipeline_name, strict=True)
         graph.attr(compound="true", splines="curved")
         self._graph(self.root_node, graph)
         return graph
@@ -219,14 +228,8 @@ class Pipelyne:
         for child_node in node.child_nodes:
             self._graph(child_node, graph)
 
-    def _link(self, node: PipeNode, graph: graphviz.Digraph):
-        for child_node in node.child_nodes:
-            graph.edge(
-                f"{node.last_step.name}",
-                f"{child_node.first_step.name}",
-                ltail=node.name,
-                lhead=child_node.name,
-            )
-            self._link(child_node, graph)
-
-
+    def connect_final_node(self):
+        for node in self.nodes:
+            if len(node.child_nodes) == 0:
+                node.add_child_node(self.final_node)
+                self.final_node.add_parent_node(node)

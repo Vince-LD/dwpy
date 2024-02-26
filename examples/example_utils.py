@@ -49,16 +49,19 @@ class AddStep(BaseStep[ExampleContext]):
         self.x_field = x_field
         self.y_field = y_field
         self.res_field = res_field
-
+        self.result: Optional[float] = None
 
     def run(self, ctx: ExampleContext):
         with ctx:
             x, y = getattr(ctx, self.x_field), getattr(ctx, self.y_field)
-            setattr(ctx, self.res_field, x + y)
+            self.result = x + y
+            setattr(ctx, self.res_field, self.result)
         
-        logging.info(f"{x} + {y} = {x + y}")
+        logging.info(f"{x} + {y} = {self.result}")
         self.complete()
 
+    def label(self) -> str:
+        return f"{super().label()}\nresult: {self.result}"
 
 class MutliplyStep(BaseStep[ExampleContext]):
     NAME = "MuiltiPly two numbers"
@@ -73,14 +76,20 @@ class MutliplyStep(BaseStep[ExampleContext]):
         self.x_field = x_field
         self.y_field = y_field
         self.res_field = res_field
+        self.result : Optional[float] = None
 
     def run(self, ctx: ExampleContext):
         with ctx:
             x, y = getattr(ctx, self.x_field), getattr(ctx, self.y_field)
-            setattr(ctx, self.res_field, x * y)
+            self.result = x * y
+            setattr(ctx, self.res_field, self.result)
         
-        logging.info(f"{x} + {y} = {x * y}")
+        logging.info(f"{x} + {y} = {self.result}")
         self.complete()
+
+    
+    def label(self) -> str:
+        return f"{super().label()}\nresult: {self.result}"
 
 class SkipStep(BaseStep[ExampleContext]):
     NAME = "Skipped step"

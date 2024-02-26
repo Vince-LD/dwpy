@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Generic
+from copy import deepcopy
+from typing import Any, Optional, Generic
 from enum import Flag, auto
 from pipelyne.context import ContextT
-
+from pprint import pformat
+from dataclasses import asdict, fields
 
 class StatusEnum(Flag):
     UNKNOWN = auto()
@@ -79,7 +81,30 @@ class BaseStep(ABC, Generic[ContextT]):
 class RootStep(BaseStep[ContextT]):
     NAME = "Start"
     STYLES = {}
-    DEFAULT_STYLE = {"shape": "diamond", "color": "blue"}
+    DEFAULT_STYLE = {"shape": "box", "color": "blue"}
+
+    def __init__(self, context_class: type[ContextT]) -> None:
+        super().__init__()
+        self.context_class  = context_class
+        self.values: dict[str, tuple[Any, type]] = {}
+        self.set_values(context_class())
 
     def run(self, ctx: ContextT):
+        self.set_values(ctx)
         self.skipped()
+
+    def label(self) -> str:
+        # return f"{pformat(ctx)}"
+        lines: list[str] = [f"{self.context_class.__name__}:"]
+        for field, (value, type_) in self.values.items():
+            lines.append(f" - {field}: {type_.__name__} = {value}")
+        return "\n".join(lines)
+    
+    def set_values(self, ctx: ContextT):
+        for field in fields(ctx):
+            if field.init:
+                self.values[field.name] = (getattr(ctx, field.name), field.type)
+
+
+class FinalStep(RootStep):
+    NAME = "End"
