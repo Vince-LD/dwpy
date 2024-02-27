@@ -1,3 +1,4 @@
+import os
 from pipelyne.pipelyne import Pipelyne, PipeNode
 from example_utils import ExampleContext, AddStep, MutliplyStep, LogStep, SkipStep
 
@@ -86,10 +87,18 @@ def main():
     pipeline.add_parents_to(node6, (node5, node1))
     pipeline.connect_final_node()
     
+    directory = os.path.abspath(os.path.join(os.path.dirname(__file__),"..", "data"))
+    
+    graph = pipeline.graph(preview=True)
+    graph.render("example_preview", directory=directory, format="svg")
+    graph.render("example_preview", directory=directory, format="png")
+
     context = ExampleContext(input_x=1.5, input_y=8)
     pipeline.execute(context)
     graph = pipeline.graph()
-    graph.view()
+    graph.render("example", directory=directory, format="svg")
+    graph.render("example", directory=directory, format="png")
+    
 
 
 if __name__ == "__main__":
