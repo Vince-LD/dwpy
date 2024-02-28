@@ -53,6 +53,7 @@ node4 = PipeNode("Process node 4").add_steps(
         name="Step 4.1",
     )
 )
+
 node5 = PipeNode("Process node ").add_steps(
     AddStep(
         x_field=context.result_step3,
