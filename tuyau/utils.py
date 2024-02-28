@@ -1,6 +1,6 @@
 from typing import Callable
 
-from pipelyne.base_step import BaseStep
+from tuyau.base_step import BaseStep
 
 def log_step(step: BaseStep):
     print(step)

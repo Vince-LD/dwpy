@@ -1,22 +1,21 @@
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
-from pipelyne.base_step import BaseStep
-from pipelyne.context import BasePipelineContext
+from tuyau.base_step import BaseStep
+from tuyau.context import BasePipelineContext, ContextVariable
 
 import logging
 
 
 @dataclass(slots=True)
 class ExampleContext(BasePipelineContext):
-    input_x: float = 0.0
-    input_y: float = 0.0
-    result_step1: Optional[float] = None
-    result_step3: Optional[float] = None
-    result_step4: Optional[float] = None
-    result_step5: Optional[float] = None
-    result_step6: Optional[float] = None
+    input_x: ContextVariable[float] = ContextVariable.new_field(0.0)
+    input_y: ContextVariable[float] = ContextVariable.new_field(0.0)
+    result_step1: ContextVariable[float] = ContextVariable.new_field(0.0)
+    result_step3: ContextVariable[float] = ContextVariable.new_field(0.0)
+    result_step4: ContextVariable[float] = ContextVariable.new_field(0.0)
+    result_step5: ContextVariable[float] = ContextVariable.new_field(0.0)
+    result_step6: ContextVariable[float] = ContextVariable.new_field(0.0)
 
 
 class LogStep(BaseStep[ExampleContext]):
@@ -24,7 +23,7 @@ class LogStep(BaseStep[ExampleContext]):
 
     def __init__(
         self,
-        field: str,
+        field: ContextVariable[Any],
         name: Optional[str] = None,
         comment: str = "",
     ) -> None:
@@ -33,19 +32,22 @@ class LogStep(BaseStep[ExampleContext]):
 
     def run(self, ctx: ExampleContext):
         with ctx:
-            logging.info(f"Printing the field value: {getattr(ctx, self.field)}")
+            logging.info(f"Printing the field value: {self.field.get()}")
         self.complete()
+
 
 class AddStep(BaseStep[ExampleContext]):
     NAME = "MuiltiPly two numbers"
 
     def __init__(
         self,
-        x_field: str, y_field: str, res_field: str, name: str | None = None,
+        x_field: ContextVariable[float],
+        y_field: ContextVariable[float],
+        res_field: ContextVariable[float],
+        name: str | None = None,
         comment: str = "",
     ) -> None:
         super().__init__(name, comment)
-        ExampleContext.validate_fields(x_field, y_field, res_field)
         self.x_field = x_field
         self.y_field = y_field
         self.res_field = res_field
@@ -53,43 +55,46 @@ class AddStep(BaseStep[ExampleContext]):
 
     def run(self, ctx: ExampleContext):
         with ctx:
-            x, y = getattr(ctx, self.x_field), getattr(ctx, self.y_field)
+            x, y = self.x_field.get(), self.y_field.get()
             self.result = x + y
-            setattr(ctx, self.res_field, self.result)
-        
+            self.res_field.set(self.result)
+
         logging.info(f"{x} + {y} = {self.result}")
         self.complete()
 
     def label(self) -> str:
         return f"{super().label()}\nresult: {self.result}"
+
 
 class MutliplyStep(BaseStep[ExampleContext]):
     NAME = "MuiltiPly two numbers"
 
     def __init__(
         self,
-        x_field: str, y_field: str, res_field: str, name: str | None = None,
+        x_field: ContextVariable[float],
+        y_field: ContextVariable[float],
+        res_field: ContextVariable[float],
+        name: str | None = None,
         comment: str = "",
     ) -> None:
         super().__init__(name, comment)
-        ExampleContext.validate_fields(x_field, y_field, res_field)
         self.x_field = x_field
         self.y_field = y_field
         self.res_field = res_field
-        self.result : Optional[float] = None
+        self.result: Optional[float] = None
 
     def run(self, ctx: ExampleContext):
         with ctx:
-            x, y = getattr(ctx, self.x_field), getattr(ctx, self.y_field)
+            x, y = self.x_field.get(), self.y_field.get()
             self.result = x * y
-            setattr(ctx, self.res_field, self.result)
-        
-        logging.info(f"{x} + {y} = {self.result}")
+            self.res_field.set(self.result)
+
+        logging.info(f"{x} * {y} = {self.result}")
         self.complete()
 
-    
     def label(self) -> str:
         return f"{super().label()}\nresult: {self.result}"
+
 
 class SkipStep(BaseStep[ExampleContext]):
     NAME = "Skipped step"

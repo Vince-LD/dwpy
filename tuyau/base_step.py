@@ -2,9 +2,12 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from typing import Any, Optional, Generic
 from enum import Flag, auto
-from pipelyne.context import ContextT
+from tuyau.context import ContextT
 from pprint import pformat
 from dataclasses import asdict, fields
+
+from tuyau.context import ContextVariable
+
 
 class StatusEnum(Flag):
     UNKNOWN = auto()
@@ -20,11 +23,21 @@ STATUS_PASSED = StatusEnum.COMPLETE | StatusEnum.SKIPPED
 class BaseStep(ABC, Generic[ContextT]):
     NAME = "Base Step"
     STYLES: dict[StatusEnum, dict[str, str]] = {
-        StatusEnum.UNKNOWN: {"shape": "box", "color": "black", "style": "dashed"},
-        StatusEnum.RUNNING: {"shape": "box", "color": "blue"},
-        StatusEnum.COMPLETE: {"shape": "invhouse", "color": "green"},
-        StatusEnum.SKIPPED: {"shape": "invhouse", "color": "grey"},
-        StatusEnum.ERROR: {"shape": "house", "color": "red"},
+        StatusEnum.UNKNOWN: {"shape": "box", "color": "black", "style": "rounded"},
+        StatusEnum.RUNNING: {
+            "shape": "box",
+            "color": "dodgerblue4",
+            "style": "rounded",
+            "bgcolor": "dodgerblue2",
+        },
+        StatusEnum.COMPLETE: {
+            "shape": "box",
+            "color": "darkgreen",
+            "style": "rounded",
+            "bgcolor": "darkolivegreen3"
+        },
+        StatusEnum.SKIPPED: {"shape": "box", "color": "grey", "style": "rounded"},
+        StatusEnum.ERROR: {"shape": "box", "color": "red", "style": "rounded"},
     }
     DEFAULT_STYLE: dict[str, str] = {}
     COMMENT = ""
@@ -75,17 +88,19 @@ class BaseStep(ABC, Generic[ContextT]):
         return (
             f"{self.__class__.__name__}: {self.name}"
             f"{'\n' if self.comment else ''}{self.comment}"
-            )
+        )
 
 
 class RootStep(BaseStep[ContextT]):
     NAME = "Start"
     STYLES = {}
-    DEFAULT_STYLE = {"shape": "box", "color": "blue"}
+    DEFAULT_STYLE = {
+        "shape": "plaintext",
+    }
 
     def __init__(self, context_class: type[ContextT]) -> None:
         super().__init__()
-        self.context_class  = context_class
+        self.context_class = context_class
         self.values: dict[str, tuple[Any, type]] = {}
         self.set_values(context_class())
 
@@ -99,11 +114,16 @@ class RootStep(BaseStep[ContextT]):
         for field, (value, type_) in self.values.items():
             lines.append(f" - {field}: {type_.__name__} = {value}")
         return "\n".join(lines)
-    
+
     def set_values(self, ctx: ContextT):
         for field in fields(ctx):
             if field.init:
-                self.values[field.name] = (getattr(ctx, field.name), field.type)
+                v = getattr(ctx, field.name)
+                if isinstance(v, ContextVariable):
+                    self.values[field.name] = (v.get(), v.type())
+                else:
+                    self.values[field.name] = (v, type(v))
+
 
 
 class FinalStep(RootStep):

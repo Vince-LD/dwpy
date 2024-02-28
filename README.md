@@ -1,2 +1,3 @@
-# dwpy
-New pipeline for Diffusion Weighted Imaging preprocessing and tractography
+# Tuyau 🚀
+
+A python library to make simple, parallelized pipelines using a graph structure! 

@@ -4,8 +4,8 @@ from functools import reduce
 from itertools import repeat
 import time
 from typing import Iterable, Optional, Self
-from pipelyne.base_step import FinalStep, RootStep, BaseStep, StatusEnum, STATUS_PASSED
-from pipelyne.context import BasePipelineContext, ContextT
+from tuyau.base_step import FinalStep, RootStep, BaseStep, StatusEnum, STATUS_PASSED
+from tuyau.context import BasePipelineContext, ContextT
 import logging
 from threading import Lock
 import graphviz
@@ -45,14 +45,17 @@ class PipeNode:
             return
         self._status = StatusEnum.COMPLETE
 
-    def add_step(self, step: BaseStep):
-        self.steps.append(step)
+    def add_steps(self, *steps: BaseStep) -> Self:
+        self.steps.extend(steps)
+        return self
 
-    def add_child_node(self, node: Self):
-        self.child_nodes.add(node)
+    def add_child_nodes(self, *nodes: Self) -> Self:
+        self.child_nodes.update(nodes)
+        return self
 
-    def add_parent_node(self, node: Self):
-        self.parent_nodes.add(node)
+    def add_parent_nodes(self, *nodes: Self) -> Self:
+        self.parent_nodes.update(nodes)
+        return self
 
     def __str__(self) -> str:
         return f"{' -> '.join([step.__class__.__name__ for step in self.steps])}"
@@ -86,7 +89,7 @@ class PipeNode:
 
     def view(self, graph: graphviz.Digraph) -> graphviz.Digraph:
         sg = graphviz.Digraph(f"cluster_{self._id}")
-        sg.attr(label=self.name)
+        sg.attr(label=self.name, color="grey")
 
         if self.steps:
             first_step = self.first_step
@@ -116,45 +119,98 @@ class PipeNode:
                 )
         return graph
 
+    def __hash__(self) -> int:
+        return self.id
 
-class Pipelyne:
+    def __eq__(self, __value: object) -> bool:
+        return isinstance(__value, self.__class__) and __value.id == self.id
+
+
+class Pipeline:
     def __init__(
         self,
         context_class: type[ContextT],
         name: str = "Pipeline",
-
     ) -> None:
         self.name = name
 
-    
+        self.nodes: set[PipeNode] = set()
+
         self.root_node = PipeNode(self.name)
-        self.root_node.add_step(RootStep(context_class))
+        self.root_node.add_steps(RootStep(context_class))
 
         self.final_node = PipeNode("")
-        self.final_node.add_step(FinalStep(context_class))
+        self.final_node.add_steps(FinalStep(context_class))
+        self.add_nodes(self.root_node, self.final_node)
 
         self.last_node = PipeNode("Pipeline end")
-        self.nodes: list[PipeNode] = []
         self._lock = Lock()
         self._remaining_nodes: int = 0
         self._running_nodes: int = 0
         self.runtime_error: Optional[BaseException] = None
 
-    def add_children_to(self, parent_node: PipeNode, child_nodes: Iterable[PipeNode]):
+    # def add_node(self, node: PipeNode):
+    #     self.nodes.add(node)
+
+    def add_nodes(self, *nodes: PipeNode) -> Self:
+        self.nodes.update(nodes)
+        return self
+
+    def add_children_to(
+        self,
+        parent_node: PipeNode,
+        *child_nodes: PipeNode,
+    ) -> Self:
+        parent_node.add_child_nodes(*child_nodes)
+
         for node in child_nodes:
-            parent_node.add_child_node(node)
-            node.add_parent_node(parent_node)
-            self.nodes.append(node)
+            node.add_parent_nodes(parent_node)
+
+        self.nodes.update(child_nodes)
+        self.nodes.add(parent_node)
+        return self
+
+    # def add_child_to(self, parent_node: PipeNode, child_node: PipeNode) -> Self:
+    #     parent_node.add_child_nodes(child_node)
+    #     child_node.add_parent_nodes(parent_node)
+
+    #     self.nodes.add(child_node)
+    #     self.nodes.add(parent_node)
+    #     return self
 
     def add_parents_to(
         self,
         child_node: PipeNode,
-        parent_nodes: Iterable[PipeNode],
-    ):
+        *parent_nodes: PipeNode,
+    ) -> Self:
+        child_node.add_parent_nodes(*parent_nodes)
+
         for node in parent_nodes:
-            node.add_child_node(child_node)
-            child_node.add_parent_node(node)
-            self.nodes.append(child_node)
+            node.add_child_nodes(child_node)
+
+        self.nodes.update(parent_nodes)
+        self.nodes.add(child_node)
+        return self
+
+    # def add_parent_to(
+    #     self,
+    #     child_node: PipeNode,
+    #     parent_node: PipeNode,
+    # ) -> Self:
+    #     parent_node.add_child_nodes(child_node)
+    #     child_node.add_parent_nodes(parent_node)
+
+    #     self.nodes.add(child_node)
+    #     self.nodes.add(parent_node)
+    #     return self
+
+    def connect_final_node(self) -> Self:
+        for node in self.nodes.difference({self.final_node}):
+            if len(node.child_nodes) == 0:
+                node.add_child_nodes(self.final_node)
+                self.final_node.add_parent_nodes(node)
+
+        return self
 
     def execute(self, ctx: BasePipelineContext):
         self.remaining_nodes = len(self.nodes)
@@ -166,7 +222,7 @@ class Pipelyne:
                 time.sleep(1)
         if self.runtime_error is not None:
             logging.exception(self.runtime_error)
-        
+
     def _parse_run(
         self, ctx: BasePipelineContext, node: PipeNode, executor: ThreadPoolExecutor
     ):
@@ -196,16 +252,6 @@ class Pipelyne:
         with self._lock:
             self._remaining_nodes = value
 
-    # @property
-    # def running_nodes(self) -> int:
-    #     with self._lock:
-    #         return self._running_nodes
-
-    # @running_nodes.setter
-    # def running_nodes(self, value: int):
-    #     with self._lock:
-    #         self._running_nodes = value
-
     def _keep_running(self):
         print(self.remaining_nodes, self.runtime_error)
         return (
@@ -227,9 +273,3 @@ class Pipelyne:
         node.view(graph)
         for child_node in node.child_nodes:
             self._graph(child_node, graph)
-
-    def connect_final_node(self):
-        for node in self.nodes:
-            if len(node.child_nodes) == 0:
-                node.add_child_node(self.final_node)
-                self.final_node.add_parent_node(node)
