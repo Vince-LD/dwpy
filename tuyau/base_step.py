@@ -1,12 +1,10 @@
 from abc import ABC, abstractmethod
-from copy import deepcopy
 from typing import Any, Optional, Generic
 from enum import Flag, auto
 from tuyau.context import ContextT
-from pprint import pformat
-from dataclasses import asdict, fields
+from dataclasses import fields
 
-from tuyau.context import ContextVariable
+from tuyau.context import CtxVar
 
 
 class StatusEnum(Flag):
@@ -44,15 +42,16 @@ class BaseStep(ABC, Generic[ContextT]):
 
     def __init__(self, name: Optional[str] = None, comment: str = "") -> None:
         super().__init__()
-        self.name = name or self.NAME
+        self.name = name if name is not None else self.NAME
         self.comment = comment or self.COMMENT
         self._status = StatusEnum.UNKNOWN
         self._id = id(self)
         self._str_id = str(self._id)
+        self.error: Optional[BaseException] = None
 
     @abstractmethod
     def run(self, ctx: ContextT):
-        self.complete()
+        ...
 
     @property
     def id(self) -> int:
@@ -72,14 +71,15 @@ class BaseStep(ABC, Generic[ContextT]):
     def running(self):
         self._status = StatusEnum.RUNNING
 
-    def complete(self):
+    def completed(self):
         self._status = StatusEnum.COMPLETE
 
     def skipped(self):
         self._status = StatusEnum.SKIPPED
 
-    def error(self):
+    def errored(self, err: BaseException):
         self._status = StatusEnum.ERROR
+        self.error = err
 
     def style(self) -> dict[str, str]:
         return self.STYLES.get(self._status, self.DEFAULT_STYLE)
@@ -119,7 +119,7 @@ class RootStep(BaseStep[ContextT]):
         for field in fields(ctx):
             if field.init:
                 v = getattr(ctx, field.name)
-                if isinstance(v, ContextVariable):
+                if isinstance(v, CtxVar):
                     self.values[field.name] = (v.get(), v.type())
                 else:
                     self.values[field.name] = (v, type(v))

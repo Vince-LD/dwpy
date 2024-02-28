@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import reduce
 from itertools import repeat
 import time
-from typing import Iterable, Optional, Self
+from typing import Optional, Self
 from tuyau.base_step import FinalStep, RootStep, BaseStep, StatusEnum, STATUS_PASSED
 from tuyau.context import BasePipelineContext, ContextT
 import logging
@@ -22,27 +22,34 @@ class PipeNode:
         self._status = StatusEnum.UNKNOWN
         self._error: Optional[BaseException] = None
         self._id = id(self)
+        self._lock = Lock()
 
     def run(self, ctx: BasePipelineContext):
-        logging.info(
-            f"{", ".join([n.name+ ":" + str(n.status) for n in self.parent_nodes])} => {self.name}"
-        )
+        # logging.info(self)
+        # logging.info(
+        #     f"{", ".join([n.name+ ":" + str(n.status) for n in self.parent_nodes])} => {self.name}"
+        # )
         if not self._all_previous_complete():
             logging.info(
                 f"{self.name} cannot run yet, "
                 f"{", ".join([n.name+ ":" + str(n.status) for n in self.parent_nodes])}"
             )
+            self._status = StatusEnum.UNKNOWN
             return
-
-        step = self.first_step
-        try:
-            for step in self.steps:
+        
+        for step in self.steps:
+            try:
                 step.run(ctx)
-        except BaseException as e:
-            self._error = e
-            self._status = StatusEnum.ERROR
-            step.error()
-            return
+                if not bool(step.status & STATUS_PASSED):
+                    self._status = StatusEnum.ERROR
+                    self._error = step.error
+                    logging.error(step.error)
+                    return
+            except Exception as e:
+                step.errored(e)
+                self._error = e
+                self._status = StatusEnum.ERROR
+                return
         self._status = StatusEnum.COMPLETE
 
     def add_steps(self, *steps: BaseStep) -> Self:
@@ -58,7 +65,7 @@ class PipeNode:
         return self
 
     def __str__(self) -> str:
-        return f"{' -> '.join([step.__class__.__name__ for step in self.steps])}"
+        return f"{self.name}: {' -> '.join([step.__class__.__name__ for step in self.steps])}"
 
     def _all_previous_complete(self) -> bool:
         return reduce(
@@ -77,7 +84,8 @@ class PipeNode:
 
     @property
     def status(self) -> StatusEnum:
-        return self._status
+        with self._lock:
+            return self._status
 
     @property
     def error(self) -> Optional[BaseException]:
@@ -138,7 +146,6 @@ class Pipeline:
 
         self.root_node = PipeNode(self.name)
         self.root_node.add_steps(RootStep(context_class))
-
         self.final_node = PipeNode("")
         self.final_node.add_steps(FinalStep(context_class))
         self.add_nodes(self.root_node, self.final_node)
@@ -149,8 +156,8 @@ class Pipeline:
         self._running_nodes: int = 0
         self.runtime_error: Optional[BaseException] = None
 
-    # def add_node(self, node: PipeNode):
-    #     self.nodes.add(node)
+    def add_node(self, node: PipeNode):
+        self.nodes.add(node)
 
     def add_nodes(self, *nodes: PipeNode) -> Self:
         self.nodes.update(nodes)
@@ -170,13 +177,13 @@ class Pipeline:
         self.nodes.add(parent_node)
         return self
 
-    # def add_child_to(self, parent_node: PipeNode, child_node: PipeNode) -> Self:
-    #     parent_node.add_child_nodes(child_node)
-    #     child_node.add_parent_nodes(parent_node)
+    def add_child_to(self, parent_node: PipeNode, child_node: PipeNode) -> Self:
+        parent_node.add_child_nodes(child_node)
+        child_node.add_parent_nodes(parent_node)
 
-    #     self.nodes.add(child_node)
-    #     self.nodes.add(parent_node)
-    #     return self
+        self.nodes.add(child_node)
+        self.nodes.add(parent_node)
+        return self
 
     def add_parents_to(
         self,
@@ -192,17 +199,17 @@ class Pipeline:
         self.nodes.add(child_node)
         return self
 
-    # def add_parent_to(
-    #     self,
-    #     child_node: PipeNode,
-    #     parent_node: PipeNode,
-    # ) -> Self:
-    #     parent_node.add_child_nodes(child_node)
-    #     child_node.add_parent_nodes(parent_node)
+    def add_parent_to(
+        self,
+        child_node: PipeNode,
+        parent_node: PipeNode,
+    ) -> Self:
+        parent_node.add_child_nodes(child_node)
+        child_node.add_parent_nodes(parent_node)
 
-    #     self.nodes.add(child_node)
-    #     self.nodes.add(parent_node)
-    #     return self
+        self.nodes.add(child_node)
+        self.nodes.add(parent_node)
+        return self
 
     def connect_final_node(self) -> Self:
         for node in self.nodes.difference({self.final_node}):
@@ -215,6 +222,7 @@ class Pipeline:
     def execute(self, ctx: BasePipelineContext):
         self.remaining_nodes = len(self.nodes)
         self.running_nodes = 0
+        print(self.remaining_nodes)
         with ThreadPoolExecutor(max_workers=ctx.thread_count) as executor:
             self._parse_run(ctx, self.root_node, executor)
             while self._keep_running():
@@ -228,10 +236,15 @@ class Pipeline:
     ):
         if node.status is not StatusEnum.UNKNOWN:
             return
-        node.run(ctx)
-        self.remaining_nodes -= 1
+        
+        if not bool(node.status & STATUS_PASSED):
+            node.run(ctx)
 
-        if node.status is StatusEnum.ERROR:
+        if bool(node.status & STATUS_PASSED):
+            self.remaining_nodes -= 1
+            logging.info(node.name + f"  ---  {self.remaining_nodes=}  ---  {node.status}")
+        
+        elif node.status is StatusEnum.ERROR:
             self.runtime_error = node.error
             return
 
@@ -253,7 +266,7 @@ class Pipeline:
             self._remaining_nodes = value
 
     def _keep_running(self):
-        print(self.remaining_nodes, self.runtime_error)
+        # logging.info(f"Remaining nodes: {self.remaining_nodes}")
         return (
             self.remaining_nodes > 0 and self.runtime_error is None
             # and self.running_nodes > 0
@@ -265,7 +278,7 @@ class Pipeline:
     def graph(self, preview=True) -> graphviz.Digraph:
         pipeline_name = f"{self.name}_preview" if preview else self.name
         graph = graphviz.Digraph(pipeline_name, strict=True)
-        graph.attr(compound="true", splines="curved")
+        # graph.attr(compound="true", splines="curved")
         self._graph(self.root_node, graph)
         return graph
 

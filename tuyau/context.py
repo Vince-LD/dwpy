@@ -1,14 +1,14 @@
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Iterable, Generic, Self, TypeVar, get_args
+from typing import Iterable, Generic, Optional, Self, TypeVar, Union, get_args
 
-from tuyau.exceptions import PipelineError
+from tuyau.exceptions import BasePipelineError
 
 ContextT = TypeVar("ContextT", bound="BasePipelineContext")
 T = TypeVar("T")
 
 
-class InvalidContextFields(PipelineError):
+class InvalidContextFields(BasePipelineError):
     def _init_(
         self, context_cls: type[ContextT], missing_fields: Iterable[str]
     ) -> None:
@@ -19,7 +19,7 @@ class InvalidContextFields(PipelineError):
         super().__init__(self.message)
 
 
-class ContextVariable(Generic[T]):
+class CtxVar(Generic[T]):
     def __init__(self, value: T) -> None:
         self.__value = value
 
@@ -31,24 +31,21 @@ class ContextVariable(Generic[T]):
 
     @classmethod
     def new_field(
-        cls,
-        value: T,
-        init: bool = True,
-        repr: bool = True,
-        kw_only: bool = True
+        cls, value: T, init: bool = True, repr: bool = True, kw_only: bool = True
     ) -> Self:
         return field(
-            init=init,
-            repr=repr,
-            kw_only=kw_only,
-            default_factory=lambda: cls(value)
+            init=init, repr=repr, kw_only=kw_only, default_factory=lambda: cls(value)
         )
 
     def __repr__(self) -> str:
         return str(self.__value)
-    
+
     def type(self) -> type[T]:
         return type(self.__value)
+
+
+OptionalCtxVar = CtxVar[Optional[T]] | CtxVar[T]
+
 
 @dataclass(slots=True)
 class BasePipelineContext:
@@ -62,13 +59,3 @@ class BasePipelineContext:
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self._thread_lock.release()
-
-    # @classmethod
-    # def validate_fields(cls, *args: str):
-    #     print(args)
-    #     # if not cls._fields_:
-    #     fields_name = set(f.name for f in fields(cls))
-    #     # print(cls._fields_)
-    #     if err_fields := tuple(filter(lambda f_name: f_name not in fields_name, args)):
-    #         print(err_fields)
-    #         raise InvalidContextFields(cls, err_fields)

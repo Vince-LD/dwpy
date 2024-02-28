@@ -1,7 +1,7 @@
-class PipelineError(BaseException):
+class BasePipelineError(ValueError):
     pass
 
-class CommandFailed(PipelineError):
+class CommandFailed(BasePipelineError):
     def __init__(self, msg: str, return_code: int) -> None:
         super().__init__(msg)
         self.return_code = return_code
