@@ -1,0 +1,122 @@
+strict digraph "Example Pipeline_preview" {
+	compound=true splines=curved
+	subgraph cluster_2307397160016 {
+		color=grey label="Example Pipeline"
+		2307404326640 [label="ExampleContext:
+ - input_x: float = 0.0
+ - input_y: float = 0.0
+ - result_step1: float = 0.0
+ - result_step3: float = 0.0
+ - result_step4: float = 0.0
+ - result_step5: float = 0.0
+ - result_step6: float = 0.0" comment="" shape=plaintext]
+	}
+	subgraph cluster_2307404327072 {
+		color=grey label="Process node 1"
+		2307404327120 [label="AddStep: Step 1.1
+result: None" color=black comment="" shape=box style=rounded]
+		2307404327168 [label="LogStep: Step 1.2" color=black comment="" shape=box style=rounded]
+		2307404327120 -> 2307404327168
+		2307404327216 [label="MutliplyStep: Step 1.3
+Square previous result
+result: None" color=black comment="Square previous result" shape=box style=rounded]
+		2307404327168 -> 2307404327216
+		2307404327264 [label="LogStep: Step 1.2" color=black comment="" shape=box style=rounded]
+		2307404327216 -> 2307404327264
+	}
+	2307404326640 -> 2307404327120 [lhead=cluster_2307404327072 ltail=cluster_2307397160016]
+	subgraph cluster_2307404327696 {
+		color=grey label="Final process node"
+		2307404327744 [label="MutliplyStep: Step 6.1
+result: None" color=black comment="" shape=box style=rounded]
+		2307404327792 [label="LogStep: Final logging!" color=black comment="" shape=box style=rounded]
+		2307404327744 -> 2307404327792
+	}
+	2307404327648 -> 2307404327744 [lhead=cluster_2307404327696 ltail=cluster_2307404327600]
+	2307404327264 -> 2307404327744 [lhead=cluster_2307404327696 ltail=cluster_2307404327072]
+	subgraph cluster_2307404326880 {
+		color=grey label=""
+		2307404326832 [label="ExampleContext:
+ - input_x: float = 0.0
+ - input_y: float = 0.0
+ - result_step1: float = 0.0
+ - result_step3: float = 0.0
+ - result_step4: float = 0.0
+ - result_step5: float = 0.0
+ - result_step6: float = 0.0" comment="" shape=plaintext]
+	}
+	2307404327792 -> 2307404326832 [lhead=cluster_2307404326880 ltail=cluster_2307404327696]
+	subgraph cluster_2307404327312 {
+		color=grey label="Process node 2"
+		2307404327360 [label="SkipStep: Skip step 2" color=black comment="" shape=box style=rounded]
+	}
+	2307404326640 -> 2307404327360 [lhead=cluster_2307404327312 ltail=cluster_2307397160016]
+	subgraph cluster_2307404327408 {
+		color=grey label="Process node 3"
+		2307404327456 [label="AddStep: Step 3.1
+result: None" color=black comment="" shape=box style=rounded]
+	}
+	2307404327360 -> 2307404327456 [lhead=cluster_2307404327408 ltail=cluster_2307404327312]
+	subgraph cluster_2307404327600 {
+		color=grey label="Process node "
+		2307404327648 [label="AddStep: Step 5.1
+result: None" color=black comment="" shape=box style=rounded]
+	}
+	2307404327456 -> 2307404327648 [lhead=cluster_2307404327600 ltail=cluster_2307404327408]
+	2307404327552 -> 2307404327648 [lhead=cluster_2307404327600 ltail=cluster_2307404327504]
+	subgraph cluster_2307404327696 {
+		color=grey label="Final process node"
+		2307404327744 [label="MutliplyStep: Step 6.1
+result: None" color=black comment="" shape=box style=rounded]
+		2307404327792 [label="LogStep: Final logging!" color=black comment="" shape=box style=rounded]
+		2307404327744 -> 2307404327792
+	}
+	2307404327648 -> 2307404327744 [lhead=cluster_2307404327696 ltail=cluster_2307404327600]
+	2307404327264 -> 2307404327744 [lhead=cluster_2307404327696 ltail=cluster_2307404327072]
+	subgraph cluster_2307404326880 {
+		color=grey label=""
+		2307404326832 [label="ExampleContext:
+ - input_x: float = 0.0
+ - input_y: float = 0.0
+ - result_step1: float = 0.0
+ - result_step3: float = 0.0
+ - result_step4: float = 0.0
+ - result_step5: float = 0.0
+ - result_step6: float = 0.0" comment="" shape=plaintext]
+	}
+	2307404327792 -> 2307404326832 [lhead=cluster_2307404326880 ltail=cluster_2307404327696]
+	subgraph cluster_2307404327504 {
+		color=grey label="Process node 4"
+		2307404327552 [label="MutliplyStep: Step 4.1
+result: None" color=black comment="" shape=box style=rounded]
+	}
+	2307404327360 -> 2307404327552 [lhead=cluster_2307404327504 ltail=cluster_2307404327312]
+	subgraph cluster_2307404327600 {
+		color=grey label="Process node "
+		2307404327648 [label="AddStep: Step 5.1
+result: None" color=black comment="" shape=box style=rounded]
+	}
+	2307404327456 -> 2307404327648 [lhead=cluster_2307404327600 ltail=cluster_2307404327408]
+	2307404327552 -> 2307404327648 [lhead=cluster_2307404327600 ltail=cluster_2307404327504]
+	subgraph cluster_2307404327696 {
+		color=grey label="Final process node"
+		2307404327744 [label="MutliplyStep: Step 6.1
+result: None" color=black comment="" shape=box style=rounded]
+		2307404327792 [label="LogStep: Final logging!" color=black comment="" shape=box style=rounded]
+		2307404327744 -> 2307404327792
+	}
+	2307404327648 -> 2307404327744 [lhead=cluster_2307404327696 ltail=cluster_2307404327600]
+	2307404327264 -> 2307404327744 [lhead=cluster_2307404327696 ltail=cluster_2307404327072]
+	subgraph cluster_2307404326880 {
+		color=grey label=""
+		2307404326832 [label="ExampleContext:
+ - input_x: float = 0.0
+ - input_y: float = 0.0
+ - result_step1: float = 0.0
+ - result_step3: float = 0.0
+ - result_step4: float = 0.0
+ - result_step5: float = 0.0
+ - result_step6: float = 0.0" comment="" shape=plaintext]
+	}
+	2307404327792 -> 2307404326832 [lhead=cluster_2307404326880 ltail=cluster_2307404327696]
+}
