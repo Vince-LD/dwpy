@@ -91,7 +91,7 @@ graph = pipeline.graph(preview=True)
 graph.render("example_preview", directory=directory, format="png")
 ```
 
-![example preview](./data/example_preview.png)
+![example preview](./data/example_preview.svg)
 
 ### 3. Execute and check the result! 🎉🎉🎉
 
@@ -102,4 +102,4 @@ graph = pipeline.graph()
 graph.render("example", directory=directory, format="png")
 ```
 
-![example result](./data/example.png)
+![example result](./data/example.svg)
