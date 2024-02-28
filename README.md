@@ -4,7 +4,9 @@ A python library to make simple, parallelized pipelines using a graph structure!
 
 ## Examples
 
-### 1. Create your pipeline like in [this example](./examples/example.py) 🧑‍💻
+### 1. Simply create your pipeline 🧑‍💻
+
+The complete example code can be found [here](./examples/example.py) and the classes are [here](./examples/example_utils.py).
 
 ```python
 pipeline = Pipeline(ExampleContext, "Example Pipeline")
@@ -80,10 +82,23 @@ node6 = PipeNode("Final process node").add_steps(
 )
 ```
 
-### 2. Preview it 🕵️
+### 2. Preview 🕵️
+
+```python
+directory = ...
+graph = pipeline.graph(preview=True)
+graph.render("example_preview", directory=directory, format="png")
+```
 
 ![example preview](./data/example_preview.png)
 
-### 3. Execute it and check the result! 🎉🎉🎉
+### 3. Execute and check the result! 🎉🎉🎉
+
+```python
+pipeline.execute(context)
+directory = ...
+graph = pipeline.graph()
+graph.render("example", directory=directory, format="png")
+```
 
 ![example result](./data/example.png)
