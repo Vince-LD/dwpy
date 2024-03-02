@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import time
 from typing import Any, Optional
 
-from tuyau.base_step import BaseStep
+from tuyau.steps.base_step import BaseStep
 from tuyau.context import BasePipelineContext, CtxVar, OptionalCtxVar
 
 import logging

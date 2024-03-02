@@ -1,22 +1,20 @@
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Iterable, Generic, Optional, Self, TypeVar, Union, get_args
+from typing import (
+    Iterable,
+    Generic,
+    Optional,
+    ParamSpec,
+    Self,
+    TypeVar,
+    Union,
+    cast,
+    get_args,
+)
 
-from tuyau.exceptions import BasePipelineError
 
 ContextT = TypeVar("ContextT", bound="BasePipelineContext")
 T = TypeVar("T")
-
-
-class InvalidContextFields(BasePipelineError):
-    def _init_(
-        self, context_cls: type[ContextT], missing_fields: Iterable[str]
-    ) -> None:
-        self.message = (
-            f"Fields '{' '.join(missing_fields)}' do not exist in "
-            f"context class {context_cls}."
-        )
-        super().__init__(self.message)
 
 
 class CtxVar(Generic[T]):
@@ -42,6 +40,9 @@ class CtxVar(Generic[T]):
 
     def type(self) -> type[T]:
         return type(self.__value)
+
+    def T(self) -> T:
+        return cast(T, self.__value)
 
 
 OptionalCtxVar = CtxVar[Optional[T]] | CtxVar[T]

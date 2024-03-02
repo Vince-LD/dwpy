@@ -4,7 +4,7 @@ from functools import reduce
 from itertools import repeat
 import time
 from typing import Optional, Self
-from tuyau.base_step import FinalStep, RootStep, BaseStep, StatusEnum, STATUS_PASSED
+from tuyau.steps.base_step import FinalStep, RootStep, BaseStep, StatusEnum, STATUS_PASSED
 from tuyau.context import BasePipelineContext, ContextT
 import logging
 from threading import Lock

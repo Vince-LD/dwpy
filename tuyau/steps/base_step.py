@@ -1,10 +1,13 @@
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Generic
+from typing import Any, Callable, Optional, Generic, ParamSpec, Sized, TypeVar
 from enum import Flag, auto
 from tuyau.context import ContextT
 from dataclasses import fields
 
-from tuyau.context import CtxVar
+from tuyau.context import CtxVar, OptionalCtxVar
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 class StatusEnum(Flag):
@@ -32,7 +35,7 @@ class BaseStep(ABC, Generic[ContextT]):
             "shape": "box",
             "color": "darkgreen",
             "style": "rounded",
-            "bgcolor": "darkolivegreen3"
+            "bgcolor": "darkolivegreen3",
         },
         StatusEnum.SKIPPED: {"shape": "box", "color": "grey", "style": "rounded"},
         StatusEnum.ERROR: {"shape": "box", "color": "red", "style": "rounded"},
@@ -125,6 +128,68 @@ class RootStep(BaseStep[ContextT]):
                     self.values[field.name] = (v, type(v))
 
 
-
 class FinalStep(RootStep):
     NAME = "End"
+
+
+class FuncStep(BaseStep, Generic[P]):
+    def __init__(
+        self,
+        func: Callable[P, R],
+        result_vars: OptionalCtxVar[R] | tuple[OptionalCtxVar, ...],
+        name: str | None = None,
+        comment: str = "",
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> None:
+        super().__init__(name, comment)
+        self.func = func
+        assert self._is_ctxvar_tuple(result_vars) or self._is_ctxvar(result_vars)
+        self._outputs: tuple[OptionalCtxVar, ...] = (
+            result_vars
+            if isinstance(result_vars, tuple)
+            and all(isinstance(f, CtxVar) for f in result_vars)
+            else (result_vars,)
+        )  # type: ignore
+        self.args = args
+        self.kwargs = kwargs
+        super().__init__()
+
+    def run(self, ctx: CtxVar):
+        args = tuple(arg.get() if isinstance(arg, CtxVar) else arg for arg in self.args)
+        kwargs = {
+            key: arg.get() if isinstance(arg, CtxVar) else arg
+            for key, arg in self.kwargs.items()
+        }
+        self._cast_results(self.func(*args, **kwargs))  # type: ignore
+
+    def _cast_results(self, results: R) -> None:
+        cast_size = len(self._outputs)
+        outputs = results if isinstance(results, tuple) else (results,)
+        output_size = len(outputs)
+        if cast_size > 1 and output_size > 1:
+            if cast_size == output_size:
+                for r, var in zip(outputs, self._outputs):
+                    var.set(r)
+                return
+            raise ValueError(
+                "Number of result CtxVar object given does not match number of "
+                f"function outputs and cannot be casted: {cast_size=} != {output_size=}"
+            )
+
+        if cast_size == 1 and output_size > 1:
+            self._outputs[0].set(outputs[0])
+            return
+
+        if cast_size > 1 and output_size == 1:
+            (res,) = outputs
+            for var in self._outputs:
+                var.set(res)
+
+    def _is_ctxvar_tuple(
+        self, value: OptionalCtxVar[R] | tuple[OptionalCtxVar, ...]
+    ) -> bool:
+        return isinstance(value, tuple) and all(isinstance(f, CtxVar) for f in value)
+
+    def _is_ctxvar(self, value: OptionalCtxVar[R] | tuple[OptionalCtxVar, ...]) -> bool:
+        return isinstance(value, CtxVar)
