@@ -26,7 +26,7 @@ class ExampleContext(BasePipelineContext):
     result_step5: PipeVar[float] = PipeVar.new_field(NoDefault)
     result_step6: PipeVar[float] = PipeVar.new_field(NoDefault)
     result_step7: PipeVar[float] = PipeVar.new_field(NoDefault)
-    issou: PipeVar[float] = PipeVar.new_field(NoDefault)
+    result_func_step: PipeVar[float] = PipeVar.new_field(NoDefault)
 
 
 class LogStep(BaseStep[ExampleContext]):

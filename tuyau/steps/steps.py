@@ -1,5 +1,6 @@
 from abc import abstractmethod
 import logging
+import pprint
 from typing import Any, Callable, Generic, ParamSpec, Self, TypeVar
 from tuyau.context import BasePipelineContext, ContextT
 from tuyau.steps.base_step import BaseStep
@@ -26,7 +27,6 @@ class RootStep(BaseStep[ContextT]):
 
     def run(self, ctx: ContextT):
         # self.set_values(ctx)
-        self.ctx = ctx
         self.completed()
 
     def label(self) -> str:
@@ -34,7 +34,7 @@ class RootStep(BaseStep[ContextT]):
         # lines: list[str] = [f"{self.context_class.__name__}:"]
         # for field, (value, type_) in self.values.items():
         #     lines.append(f" - {field}: {type_.__name__} = {value}")
-        return repr(self.ctx)
+        return pprint.pformat(self.ctx)
 
     # def set_values(self, ctx: ContextT):
     #     for field in fields(ctx):
@@ -48,6 +48,10 @@ class RootStep(BaseStep[ContextT]):
 
 class FinalStep(RootStep):
     NAME = "End"
+
+    def run(self, ctx: BasePipelineContext):
+        self.ctx = ctx
+        self.completed()
 
 
 class FuncStep(BaseStep, Generic[P, R]):

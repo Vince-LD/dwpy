@@ -30,7 +30,9 @@ def main():
     SquareStep = FuncStep.new(do_something_in_process)
 
     square_step = SquareStep(
-        result_vars=context.issou, a=context.result_step5.T, b=context.result_step6.T
+        result_vars=context.result_func_step,
+        a=context.result_step5.T,
+        b=context.result_step6.T,
     )
 
     node1 = PipeNode("Process node 1").add_steps(
@@ -90,7 +92,7 @@ def main():
         ),
         LogStep(context.result_step6, name="result_step6"),
         square_step,
-        LogStep(context.issou, name="issou"),
+        LogStep(context.result_func_step, name="result_func_step"),
     )
 
     (
@@ -103,9 +105,9 @@ def main():
 
     directory = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
 
-    # graph = pipeline.graph(preview=True)
-    # graph.render("example_preview", directory=directory, format="svg")
-    # graph.render("example_preview", directory=directory, format="png")
+    graph = pipeline.graph(preview=True)
+    graph.render("example_preview", directory=directory, format="svg")
+    graph.render("example_preview", directory=directory, format="png")
 
     pipeline.execute(context)
     graph = pipeline.graph()
