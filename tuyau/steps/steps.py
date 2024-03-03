@@ -143,13 +143,3 @@ class FuncStep(BaseStep, Generic[P, R]):
                 return func
 
         return NewFuncStep  # type: ignore
-
-
-if __name__ == "__main__":
-
-    def test(a: int) -> int:
-        return a
-
-    F = FuncStep.new(test)
-    f = F(PipeVar[int](0), a=PipeVar(12).T)
-    f.run(BasePipelineContext())
