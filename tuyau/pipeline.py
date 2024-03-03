@@ -34,12 +34,6 @@ class PipeNode:
 
     def run(self, ctx: BasePipelineContext):
         if self.all_parents_executed.acquire(blocking=False):
-            # self.all_parents_executed.release()
-            # logging.info(
-            #     f"{self.name} cannot run yet, "
-            #     f"{", ".join([n.name+ ":" + str(n.status) for n in self.parent_nodes])}"
-            # )
-            # logging.info(f"{self.name}: {self.all_parents_executed._value=}")
             self._status = StatusEnum.UNKNOWN
             return
 

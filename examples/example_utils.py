@@ -3,7 +3,7 @@ import time
 from typing import Any, Optional
 
 from tuyau.steps.base_step import BaseStep
-from tuyau.context import BasePipelineContext, CtxVar, CtxVar, NoDefault
+from tuyau.context import BasePipelineContext, PipeVar, NoDefault
 
 import logging
 
@@ -18,15 +18,15 @@ class ExampleInvalidInputsError(BasePipelineError):
 
 @dataclass(slots=True)
 class ExampleContext(BasePipelineContext):
-    input_x: CtxVar[float] = CtxVar.new_field(0.0)
-    input_y: CtxVar[float] = CtxVar.new_field(0.0)
-    result_step1: CtxVar[float] = CtxVar.new_field(NoDefault)
-    result_step3: CtxVar[float] = CtxVar.new_field(NoDefault)
-    result_step4: CtxVar[float] = CtxVar.new_field(NoDefault)
-    result_step5: CtxVar[float] = CtxVar.new_field(NoDefault)
-    result_step6: CtxVar[float] = CtxVar.new_field(NoDefault)
-    result_step7: CtxVar[float] = CtxVar.new_field(NoDefault)
-    issou: CtxVar[float] = CtxVar.new_field(NoDefault)
+    input_x: PipeVar[float] = PipeVar.new_field(0.0)
+    input_y: PipeVar[float] = PipeVar.new_field(0.0)
+    result_step1: PipeVar[float] = PipeVar.new_field(NoDefault)
+    result_step3: PipeVar[float] = PipeVar.new_field(NoDefault)
+    result_step4: PipeVar[float] = PipeVar.new_field(NoDefault)
+    result_step5: PipeVar[float] = PipeVar.new_field(NoDefault)
+    result_step6: PipeVar[float] = PipeVar.new_field(NoDefault)
+    result_step7: PipeVar[float] = PipeVar.new_field(NoDefault)
+    issou: PipeVar[float] = PipeVar.new_field(NoDefault)
 
 
 class LogStep(BaseStep[ExampleContext]):
@@ -34,7 +34,7 @@ class LogStep(BaseStep[ExampleContext]):
 
     def __init__(
         self,
-        field: CtxVar[Any],
+        field: PipeVar[Any],
         name: Optional[str] = None,
         comment: str = "",
     ) -> None:
@@ -53,9 +53,9 @@ class AdditionStep(BaseStep[ExampleContext]):
 
     def __init__(
         self,
-        a_field: CtxVar[float],
-        b_field: CtxVar[float],
-        res_field: CtxVar[float],
+        a_field: PipeVar[float],
+        b_field: PipeVar[float],
+        res_field: PipeVar[float],
         name: str | None = None,
         comment: str = "",
     ) -> None:
@@ -88,9 +88,9 @@ class MutliplyStep(BaseStep[ExampleContext]):
 
     def __init__(
         self,
-        a_field: CtxVar[float],
-        b_field: CtxVar[float],
-        res_field: CtxVar[float],
+        a_field: PipeVar[float],
+        b_field: PipeVar[float],
+        res_field: PipeVar[float],
         name: str | None = None,
         comment: str = "",
     ) -> None:

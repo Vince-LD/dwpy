@@ -8,9 +8,8 @@ from example_utils import (
     SkipStep,
 )
 from tuyau.steps import FuncStep
-from tuyau.context import CtxVar
+from tuyau.context import PipeVar
 from multiprocessing import Pool
-import logging
 
 
 def square(a: float) -> float:
@@ -26,13 +25,12 @@ def do_something_in_process(a: float, b: float) -> float:
 def main():
     pipeline = Pipeline(ExampleContext, "Example Pipeline")
 
-    context = ExampleContext(input_x=CtxVar(1.5), input_y=CtxVar(8), thread_count=2)
+    context = ExampleContext(input_x=PipeVar(1.5), input_y=PipeVar(8), thread_count=2)
 
-    square_step = FuncStep(
-        do_something_in_process,
-        result_vars=context.issou,
-        a=context.result_step6.T,
-        b=context.result_step5.T,
+    SquareStep = FuncStep.new(do_something_in_process)
+
+    square_step = SquareStep(
+        result_vars=context.issou, a=context.result_step5.T, b=context.result_step6.T
     )
 
     node1 = PipeNode("Process node 1").add_steps(

@@ -1,10 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional, Generic, ParamSpec, Sized, TypeVar
+from typing import Optional, Generic, ParamSpec, TypeVar
 from enum import Flag, auto
 from tuyau.context import ContextT
-from dataclasses import fields
 
-from tuyau.context import CtxVar, CtxVar
 
 P = ParamSpec("P")
 R = TypeVar("R")

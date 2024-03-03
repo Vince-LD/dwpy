@@ -1,17 +1,11 @@
 from dataclasses import dataclass, field
-import logging
 from threading import Lock
 from typing import (
-    Iterable,
     Generic,
-    Optional,
-    ParamSpec,
     Self,
     TypeVar,
-    Union,
     cast,
     final,
-    get_args,
 )
 from tuyau.exceptions import NoDefaultError
 
@@ -24,7 +18,7 @@ class NoDefault:
     pass
 
 
-class CtxVar(Generic[T]):
+class PipeVar(Generic[T]):
     def __init__(self, value: T | type[NoDefault]) -> None:
         self.__value = value
 
@@ -35,7 +29,7 @@ class CtxVar(Generic[T]):
                 "Cannot get a value that was not initialized (=NoDefault). "
                 f"If a {self.__class__.__name__} is inititalized with the value "
                 f"{NoDefault.__class__.__name__}, you cannot get it until method "
-                "CtxVar.set([new_value]) is called."
+                "PipeVar.set([new_value]) is called."
             )
         return value
 
