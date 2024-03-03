@@ -18,17 +18,15 @@ def square(a: float) -> float:
 
 
 def do_something_in_process(a: float, b: float) -> float:
-    logging.info("RUNNING do_smth 1")
     pool = Pool(2)
     result = pool.map(square, (a, b))
-    logging.info(f"RUNNING do_smth 2 {sum(result)}")
     return sum(result)
 
 
 def main():
     pipeline = Pipeline(ExampleContext, "Example Pipeline")
 
-    context = ExampleContext(input_x=CtxVar(1.5), input_y=CtxVar(8))
+    context = ExampleContext(input_x=CtxVar(1.5), input_y=CtxVar(8), thread_count=2)
 
     square_step = FuncStep(
         do_something_in_process,
@@ -81,18 +79,20 @@ def main():
             b_field=context.result_step4,
             res_field=context.result_step5,
             name="Step 5.1",
-        )
+        ),
+        LogStep(context.result_step5, name="result_step5"),
     )
 
     node6 = PipeNode("Process node 6").add_steps(
-        MutliplyStep(
-            a_field=context.result_step3,
+        AdditionStep(
+            a_field=context.result_step1,
             b_field=context.result_step5,
             res_field=context.result_step6,
             name="Step 6.1",
         ),
+        LogStep(context.result_step6, name="result_step6"),
         square_step,
-        LogStep(context.result_step6, name=""),
+        LogStep(context.issou, name="issou"),
     )
 
     (
@@ -110,9 +110,9 @@ def main():
     # graph.render("example_preview", directory=directory, format="png")
 
     pipeline.execute(context)
-    # graph = pipeline.graph()
-    # graph.render("example", directory=directory, format="svg")
-    # graph.render("example", directory=directory, format="png")
+    graph = pipeline.graph()
+    graph.render("example", directory=directory, format="svg")
+    graph.render("example", directory=directory, format="png")
 
 
 if __name__ == "__main__":

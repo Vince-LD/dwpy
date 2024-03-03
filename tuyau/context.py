@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import logging
 from threading import Lock
 from typing import (
     Iterable,
@@ -9,27 +10,45 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    final,
     get_args,
 )
-
+from tuyau.exceptions import NoDefaultError
 
 ContextT = TypeVar("ContextT", bound="BasePipelineContext")
 T = TypeVar("T")
 
 
+@final
+class NoDefault:
+    pass
+
+
 class CtxVar(Generic[T]):
-    def __init__(self, value: T) -> None:
+    def __init__(self, value: T | type[NoDefault]) -> None:
         self.__value = value
 
     def get(self) -> T:
-        return self.__value
+        value = self.__value
+        if value is NoDefault:
+            raise NoDefaultError(
+                "Cannot get a value that was not initialized (=NoDefault). "
+                f"If a {self.__class__.__name__} is inititalized with the value "
+                f"{NoDefault.__class__.__name__}, you cannot get it until method "
+                "CtxVar.set([new_value]) is called."
+            )
+        return value
 
     def set(self, value: T):
         self.__value = value
 
     @classmethod
     def new_field(
-        cls, value: T, init: bool = True, repr: bool = True, kw_only: bool = True
+        cls,
+        value: T | type[NoDefault],
+        init: bool = True,
+        repr: bool = True,
+        kw_only: bool = True,
     ) -> Self:
         return field(
             init=init, repr=repr, kw_only=kw_only, default_factory=lambda: cls(value)
@@ -43,22 +62,19 @@ class CtxVar(Generic[T]):
 
     @property
     def T(self) -> T:
-        return cast(T, self.__value)
-
-
-OptionalCtxVar = CtxVar[Optional[T]] | CtxVar[T]
+        return cast(T, self)
 
 
 @dataclass(slots=True)
 class BasePipelineContext:
     thread_count: int = 4
-    # _thread_lock: Lock = field(init=False, repr=False, default_factory=Lock)
+    _thread_lock: Lock = field(init=False, repr=False, default_factory=Lock)
     _fields_: set[str] = field(init=False, repr=False, default_factory=set)
 
     def __enter__(self) -> Self:
-        # self._thread_lock.acquire()
+        self._thread_lock.acquire()
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        # self._thread_lock.release()
+        self._thread_lock.release()
         return

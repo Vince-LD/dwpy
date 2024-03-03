@@ -4,7 +4,7 @@ from enum import Flag, auto
 from tuyau.context import ContextT
 from dataclasses import fields
 
-from tuyau.context import CtxVar, OptionalCtxVar
+from tuyau.context import CtxVar, CtxVar
 
 P = ParamSpec("P")
 R = TypeVar("R")

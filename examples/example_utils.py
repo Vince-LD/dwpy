@@ -3,7 +3,7 @@ import time
 from typing import Any, Optional
 
 from tuyau.steps.base_step import BaseStep
-from tuyau.context import BasePipelineContext, CtxVar, OptionalCtxVar
+from tuyau.context import BasePipelineContext, CtxVar, CtxVar, NoDefault
 
 import logging
 
@@ -12,7 +12,7 @@ from tuyau.exceptions import BasePipelineError
 
 class ExampleInvalidInputsError(BasePipelineError):
     def __init__(self, message: str) -> None:
-        logging.error(message)
+        logging.exception(message)
         super().__init__(message)
 
 
@@ -20,12 +20,13 @@ class ExampleInvalidInputsError(BasePipelineError):
 class ExampleContext(BasePipelineContext):
     input_x: CtxVar[float] = CtxVar.new_field(0.0)
     input_y: CtxVar[float] = CtxVar.new_field(0.0)
-    result_step1: CtxVar[float] = CtxVar.new_field(0.0)
-    result_step3: CtxVar[float] = CtxVar.new_field(0.0)
-    result_step4: CtxVar[float] = CtxVar.new_field(0.0)
-    result_step5: CtxVar[float] = CtxVar.new_field(0.0)
-    result_step6: CtxVar[float] = CtxVar.new_field(0.0)
-    issou: CtxVar[float] = CtxVar.new_field(0)
+    result_step1: CtxVar[float] = CtxVar.new_field(NoDefault)
+    result_step3: CtxVar[float] = CtxVar.new_field(NoDefault)
+    result_step4: CtxVar[float] = CtxVar.new_field(NoDefault)
+    result_step5: CtxVar[float] = CtxVar.new_field(NoDefault)
+    result_step6: CtxVar[float] = CtxVar.new_field(NoDefault)
+    result_step7: CtxVar[float] = CtxVar.new_field(NoDefault)
+    issou: CtxVar[float] = CtxVar.new_field(NoDefault)
 
 
 class LogStep(BaseStep[ExampleContext]):
@@ -52,9 +53,9 @@ class AdditionStep(BaseStep[ExampleContext]):
 
     def __init__(
         self,
-        a_field: OptionalCtxVar[float],
-        b_field: OptionalCtxVar[float],
-        res_field: OptionalCtxVar[float],
+        a_field: CtxVar[float],
+        b_field: CtxVar[float],
+        res_field: CtxVar[float],
         name: str | None = None,
         comment: str = "",
     ) -> None:
@@ -87,9 +88,9 @@ class MutliplyStep(BaseStep[ExampleContext]):
 
     def __init__(
         self,
-        a_field: OptionalCtxVar[float],
-        b_field: OptionalCtxVar[float],
-        res_field: OptionalCtxVar[float],
+        a_field: CtxVar[float],
+        b_field: CtxVar[float],
+        res_field: CtxVar[float],
         name: str | None = None,
         comment: str = "",
     ) -> None:
