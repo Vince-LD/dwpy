@@ -40,7 +40,7 @@ class PipeNode:
             self._status = StatusEnum.UNKNOWN
             return
 
-        if self._finished.is_set():
+        if self.finished:
             logging.info(f"{self.name} already finished")
             return
         self._finished.set()
@@ -108,6 +108,10 @@ class PipeNode:
     def id(self) -> int:
         return self._id
 
+    @property
+    def finished(self) -> int:
+        return self._finished.is_set()
+
     def view(self, graph: graphviz.Digraph) -> graphviz.Digraph:
         sg = graphviz.Digraph(f"cluster_{self._id}")
         sg.attr(label=self.name, color="grey")
@@ -162,8 +166,6 @@ class Pipeline:
         self.final_node = PipeNode("")
         self.final_node.add_steps(FinalStep(context_class))
         self.add_nodes(self.root_node, self.final_node)
-
-        self.last_node = PipeNode("Pipeline end")
 
         # self._async_loop = asyncio.get_event_loop()
         # self._coro_pool_count = asyncio.Semaphore(4)
@@ -280,9 +282,9 @@ class Pipeline:
 
     def _keep_running(self):
         # print(self.last_node.status, self.runtime_error is None)
-        is_node_remaining = self.remaining_nodes.acquire(blocking=False)
-        self.remaining_nodes.release()
-        return is_node_remaining and self.runtime_error is None
+        # is_node_remaining = self.remaining_nodes.acquire(blocking=False)
+        # self.remaining_nodes.release()
+        return not self.final_node.finished and self.runtime_error is None
 
     def build(self):
         pass
