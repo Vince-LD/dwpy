@@ -41,6 +41,7 @@ class CtxVar(Generic[T]):
     def type(self) -> type[T]:
         return type(self.__value)
 
+    @property
     def T(self) -> T:
         return cast(T, self.__value)
 
@@ -50,13 +51,14 @@ OptionalCtxVar = CtxVar[Optional[T]] | CtxVar[T]
 
 @dataclass(slots=True)
 class BasePipelineContext:
-    thread_count = 4
-    _thread_lock: Lock = field(init=False, repr=False, default_factory=Lock)
+    thread_count: int = 4
+    # _thread_lock: Lock = field(init=False, repr=False, default_factory=Lock)
     _fields_: set[str] = field(init=False, repr=False, default_factory=set)
 
     def __enter__(self) -> Self:
-        self._thread_lock.acquire()
+        # self._thread_lock.acquire()
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        self._thread_lock.release()
+        # self._thread_lock.release()
+        return

@@ -10,7 +10,6 @@ import logging
 from tuyau.exceptions import BasePipelineError
 
 
-
 class ExampleInvalidInputsError(BasePipelineError):
     def __init__(self, message: str) -> None:
         logging.error(message)
@@ -21,11 +20,12 @@ class ExampleInvalidInputsError(BasePipelineError):
 class ExampleContext(BasePipelineContext):
     input_x: CtxVar[float] = CtxVar.new_field(0.0)
     input_y: CtxVar[float] = CtxVar.new_field(0.0)
-    result_step1: CtxVar[Optional[float]] = CtxVar.new_field(0.0)
-    result_step3: CtxVar[Optional[float]] = CtxVar.new_field(0.0)
-    result_step4: CtxVar[Optional[float]] = CtxVar.new_field(0.0)
-    result_step5: CtxVar[Optional[float]] = CtxVar.new_field(0.0)
-    result_step6: CtxVar[Optional[float]] = CtxVar.new_field(0.0)
+    result_step1: CtxVar[float] = CtxVar.new_field(0.0)
+    result_step3: CtxVar[float] = CtxVar.new_field(0.0)
+    result_step4: CtxVar[float] = CtxVar.new_field(0.0)
+    result_step5: CtxVar[float] = CtxVar.new_field(0.0)
+    result_step6: CtxVar[float] = CtxVar.new_field(0.0)
+    issou: CtxVar[float] = CtxVar.new_field(0)
 
 
 class LogStep(BaseStep[ExampleContext]):

@@ -7,15 +7,34 @@ from example_utils import (
     LogStep,
     SkipStep,
 )
+from tuyau.steps import FuncStep
 from tuyau.context import CtxVar
+from multiprocessing import Pool
+import logging
+
+
+def square(a: float) -> float:
+    return a**2
+
+
+def do_something_in_process(a: float, b: float) -> float:
+    logging.info("RUNNING do_smth 1")
+    pool = Pool(2)
+    result = pool.map(square, (a, b))
+    logging.info(f"RUNNING do_smth 2 {sum(result)}")
+    return sum(result)
 
 
 def main():
     pipeline = Pipeline(ExampleContext, "Example Pipeline")
 
-    context = ExampleContext(
-        input_x=CtxVar(1.5),
-        input_y=CtxVar(8),
+    context = ExampleContext(input_x=CtxVar(1.5), input_y=CtxVar(8))
+
+    square_step = FuncStep(
+        do_something_in_process,
+        result_vars=context.issou,
+        a=context.result_step6.T,
+        b=context.result_step5.T,
     )
 
     node1 = PipeNode("Process node 1").add_steps(
@@ -70,8 +89,9 @@ def main():
             a_field=context.result_step3,
             b_field=context.result_step5,
             res_field=context.result_step6,
-            name="Step 6.1"
+            name="Step 6.1",
         ),
+        square_step,
         LogStep(context.result_step6, name=""),
     )
 
@@ -80,7 +100,7 @@ def main():
         .add_children_to(node2, node3, node4)
         .add_parents_to(node5, node3, node4)
         .add_parents_to(node6, node5, node1)
-        .connect_final_node()
+        .terminate_pipeline()
     )
 
     directory = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
@@ -90,9 +110,9 @@ def main():
     # graph.render("example_preview", directory=directory, format="png")
 
     pipeline.execute(context)
-    graph = pipeline.graph()
-    graph.render("example", directory=directory, format="svg")
-    graph.render("example", directory=directory, format="png")
+    # graph = pipeline.graph()
+    # graph.render("example", directory=directory, format="svg")
+    # graph.render("example", directory=directory, format="png")
 
 
 if __name__ == "__main__":
