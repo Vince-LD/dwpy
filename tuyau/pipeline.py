@@ -1,20 +1,22 @@
 from concurrent.futures import ThreadPoolExecutor
-
+import threading
 from functools import reduce
 from itertools import repeat
 import time
 from typing import Optional, Self
-from tuyau.base_step import FinalStep, RootStep, BaseStep, StatusEnum, STATUS_PASSED
+from tuyau.steps import BaseStep, StatusEnum, STATUS_PASSED, FinalStep, RootStep
+
 from tuyau.context import BasePipelineContext, ContextT
 import logging
-from threading import Lock
+
+# import asyncio
 import graphviz
 
 logging.basicConfig(level=logging.DEBUG)
 
 
 class PipeNode:
-    def __init__(self, name="") -> None:
+    def __init__(self, name="Node") -> None:
         self.name = name
         self.steps: list[BaseStep] = []
         self.parent_nodes: set[PipeNode] = set()
@@ -22,35 +24,41 @@ class PipeNode:
         self._status = StatusEnum.UNKNOWN
         self._error: Optional[BaseException] = None
         self._id = id(self)
-        self._lock = Lock()
+        self.all_parents_executed: threading.Semaphore
+        self.update_run_flag()
+        self._executed = threading.Event()
+
+    def update_run_flag(self):
+        required = max(len(self.parent_nodes) - 1, 0)
+        self.all_parents_executed = threading.Semaphore(required)
 
     def run(self, ctx: BasePipelineContext):
-        # logging.info(self)
-        # logging.info(
-        #     f"{", ".join([n.name+ ":" + str(n.status) for n in self.parent_nodes])} => {self.name}"
-        # )
-        if not self._all_previous_complete():
-            logging.info(
-                f"{self.name} cannot run yet, "
-                f"{", ".join([n.name+ ":" + str(n.status) for n in self.parent_nodes])}"
-            )
+        if self.all_parents_executed.acquire(blocking=False):
             self._status = StatusEnum.UNKNOWN
             return
-        
+
+        if self.executed:
+            return
+
+        self._executed.set()
+
         for step in self.steps:
             try:
                 step.run(ctx)
                 if not bool(step.status & STATUS_PASSED):
                     self._status = StatusEnum.ERROR
                     self._error = step.error
-                    logging.error(step.error)
+                    logging.exception(step.error)
                     return
             except Exception as e:
                 step.errored(e)
                 self._error = e
                 self._status = StatusEnum.ERROR
                 return
+
         self._status = StatusEnum.COMPLETE
+        # for node in self.child_nodes:
+        #     node.all_parents_executed.acquire(blocking=False)
 
     def add_steps(self, *steps: BaseStep) -> Self:
         self.steps.extend(steps)
@@ -58,14 +66,17 @@ class PipeNode:
 
     def add_child_nodes(self, *nodes: Self) -> Self:
         self.child_nodes.update(nodes)
+        for node in nodes:
+            node.update_run_flag()
         return self
 
     def add_parent_nodes(self, *nodes: Self) -> Self:
         self.parent_nodes.update(nodes)
+        self.update_run_flag()
         return self
 
     def __str__(self) -> str:
-        return f"{self.name}: {' -> '.join([step.__class__.__name__ for step in self.steps])}"
+        return f"{self.name}: {' -> '.join([step.name for step in self.steps])}"
 
     def _all_previous_complete(self) -> bool:
         return reduce(
@@ -84,8 +95,7 @@ class PipeNode:
 
     @property
     def status(self) -> StatusEnum:
-        with self._lock:
-            return self._status
+        return self._status
 
     @property
     def error(self) -> Optional[BaseException]:
@@ -94,6 +104,10 @@ class PipeNode:
     @property
     def id(self) -> int:
         return self._id
+
+    @property
+    def executed(self) -> int:
+        return self._executed.is_set()
 
     def view(self, graph: graphviz.Digraph) -> graphviz.Digraph:
         sg = graphviz.Digraph(f"cluster_{self._id}")
@@ -146,13 +160,15 @@ class Pipeline:
 
         self.root_node = PipeNode(self.name)
         self.root_node.add_steps(RootStep(context_class))
-        self.final_node = PipeNode("")
+        self.final_node = PipeNode(name="FINAL NODE")
         self.final_node.add_steps(FinalStep(context_class))
         self.add_nodes(self.root_node, self.final_node)
 
-        self.last_node = PipeNode("Pipeline end")
-        self._lock = Lock()
-        self._remaining_nodes: int = 0
+        # self._async_loop = asyncio.get_event_loop()
+        # self._coro_pool_count = asyncio.Semaphore(4)
+        self.default_thread_count = 4
+
+        self.remaining_nodes = threading.Semaphore(len(self.nodes))
         self._running_nodes: int = 0
         self.runtime_error: Optional[BaseException] = None
 
@@ -211,23 +227,24 @@ class Pipeline:
         self.nodes.add(parent_node)
         return self
 
-    def connect_final_node(self) -> Self:
-        for node in self.nodes.difference({self.final_node}):
-            if len(node.child_nodes) == 0:
-                node.add_child_nodes(self.final_node)
-                self.final_node.add_parent_nodes(node)
-
+    def start_pipeline_with(self, *nodes: PipeNode) -> Self:
+        self.add_children_to(self.root_node, *nodes)
         return self
 
+    def terminate_pipeline(self):
+        for node in self.nodes.difference({self.final_node}):
+            if len(node.child_nodes) == 0:
+                self.add_child_to(node, self.final_node)
+
     def execute(self, ctx: BasePipelineContext):
-        self.remaining_nodes = len(self.nodes)
+        self.remaining_nodes = threading.Semaphore(len(self.nodes))
         self.running_nodes = 0
-        print(self.remaining_nodes)
-        with ThreadPoolExecutor(max_workers=ctx.thread_count) as executor:
-            self._parse_run(ctx, self.root_node, executor)
+        thread_count = ctx.thread_count or self.default_thread_count
+        with ThreadPoolExecutor(thread_count) as executor:
+            executor.submit(self._parse_run, ctx, self.root_node, executor)
             while self._keep_running():
-                print("keep_running")
                 time.sleep(1)
+
         if self.runtime_error is not None:
             logging.exception(self.runtime_error)
 
@@ -236,41 +253,23 @@ class Pipeline:
     ):
         if node.status is not StatusEnum.UNKNOWN:
             return
-        
+
         if not bool(node.status & STATUS_PASSED):
             node.run(ctx)
 
+        if not node.executed:
+            return
+
         if bool(node.status & STATUS_PASSED):
-            self.remaining_nodes -= 1
-            logging.info(node.name + f"  ---  {self.remaining_nodes=}  ---  {node.status}")
-        
+            self.remaining_nodes.acquire(blocking=False)
+
         elif node.status is StatusEnum.ERROR:
             self.runtime_error = node.error
             return
-
-        executor.map(
-            self._parse_run,
-            repeat(ctx),
-            node.child_nodes,
-            repeat(executor),
-        )
-
-    @property
-    def remaining_nodes(self) -> int:
-        with self._lock:
-            return self._remaining_nodes
-
-    @remaining_nodes.setter
-    def remaining_nodes(self, value: int):
-        with self._lock:
-            self._remaining_nodes = value
+        executor.map(self._parse_run, repeat(ctx), node.child_nodes, repeat(executor))
 
     def _keep_running(self):
-        # logging.info(f"Remaining nodes: {self.remaining_nodes}")
-        return (
-            self.remaining_nodes > 0 and self.runtime_error is None
-            # and self.running_nodes > 0
-        )
+        return not self.final_node.executed and self.runtime_error is None
 
     def build(self):
         pass

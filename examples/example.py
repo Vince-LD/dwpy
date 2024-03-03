@@ -7,15 +7,30 @@ from example_utils import (
     LogStep,
     SkipStep,
 )
-from tuyau.context import CtxVar
+from tuyau.steps import FuncStep
+from tuyau.context import PipeVar
+from multiprocessing import Pool
+
+
+def square(a: float) -> float:
+    return a**2
+
+
+def do_something_in_process(a: float, b: float) -> float:
+    pool = Pool(2)
+    result = pool.map(square, (a, b))
+    return sum(result)
 
 
 def main():
     pipeline = Pipeline(ExampleContext, "Example Pipeline")
 
-    context = ExampleContext(
-        input_x=CtxVar(1.5),
-        input_y=CtxVar(8),
+    context = ExampleContext(input_x=PipeVar(1.5), input_y=PipeVar(8), thread_count=2)
+
+    SquareStep = FuncStep.new(do_something_in_process)
+
+    square_step = SquareStep(
+        result_vars=context.issou, a=context.result_step5.T, b=context.result_step6.T
     )
 
     node1 = PipeNode("Process node 1").add_steps(
@@ -62,17 +77,20 @@ def main():
             b_field=context.result_step4,
             res_field=context.result_step5,
             name="Step 5.1",
-        )
+        ),
+        LogStep(context.result_step5, name="result_step5"),
     )
 
     node6 = PipeNode("Process node 6").add_steps(
-        MutliplyStep(
-            a_field=context.result_step3,
+        AdditionStep(
+            a_field=context.result_step1,
             b_field=context.result_step5,
             res_field=context.result_step6,
-            name="Step 6.1"
+            name="Step 6.1",
         ),
-        LogStep(context.result_step6, name=""),
+        LogStep(context.result_step6, name="result_step6"),
+        square_step,
+        LogStep(context.issou, name="issou"),
     )
 
     (
@@ -80,7 +98,7 @@ def main():
         .add_children_to(node2, node3, node4)
         .add_parents_to(node5, node3, node4)
         .add_parents_to(node6, node5, node1)
-        .connect_final_node()
+        .terminate_pipeline()
     )
 
     directory = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))

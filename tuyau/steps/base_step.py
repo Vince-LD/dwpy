@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Generic
+from typing import Optional, Generic, ParamSpec, TypeVar
 from enum import Flag, auto
 from tuyau.context import ContextT
-from dataclasses import fields
 
-from tuyau.context import CtxVar
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 class StatusEnum(Flag):
@@ -32,7 +33,7 @@ class BaseStep(ABC, Generic[ContextT]):
             "shape": "box",
             "color": "darkgreen",
             "style": "rounded",
-            "bgcolor": "darkolivegreen3"
+            "bgcolor": "darkolivegreen3",
         },
         StatusEnum.SKIPPED: {"shape": "box", "color": "grey", "style": "rounded"},
         StatusEnum.ERROR: {"shape": "box", "color": "red", "style": "rounded"},
@@ -89,42 +90,3 @@ class BaseStep(ABC, Generic[ContextT]):
             f"{self.__class__.__name__}: {self.name}"
             f"{'\n' if self.comment else ''}{self.comment}"
         )
-
-
-class RootStep(BaseStep[ContextT]):
-    NAME = "Start"
-    STYLES = {}
-    DEFAULT_STYLE = {
-        "shape": "plaintext",
-    }
-
-    def __init__(self, context_class: type[ContextT]) -> None:
-        super().__init__()
-        self.context_class = context_class
-        self.values: dict[str, tuple[Any, type]] = {}
-        self.set_values(context_class())
-
-    def run(self, ctx: ContextT):
-        self.set_values(ctx)
-        self.skipped()
-
-    def label(self) -> str:
-        # return f"{pformat(ctx)}"
-        lines: list[str] = [f"{self.context_class.__name__}:"]
-        for field, (value, type_) in self.values.items():
-            lines.append(f" - {field}: {type_.__name__} = {value}")
-        return "\n".join(lines)
-
-    def set_values(self, ctx: ContextT):
-        for field in fields(ctx):
-            if field.init:
-                v = getattr(ctx, field.name)
-                if isinstance(v, CtxVar):
-                    self.values[field.name] = (v.get(), v.type())
-                else:
-                    self.values[field.name] = (v, type(v))
-
-
-
-class FinalStep(RootStep):
-    NAME = "End"

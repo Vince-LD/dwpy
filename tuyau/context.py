@@ -1,37 +1,48 @@
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Iterable, Generic, Optional, Self, TypeVar, Union, get_args
-
-from tuyau.exceptions import BasePipelineError
+from typing import (
+    Generic,
+    Self,
+    TypeVar,
+    cast,
+    final,
+)
+from tuyau.exceptions import NoDefaultError
 
 ContextT = TypeVar("ContextT", bound="BasePipelineContext")
 T = TypeVar("T")
 
 
-class InvalidContextFields(BasePipelineError):
-    def _init_(
-        self, context_cls: type[ContextT], missing_fields: Iterable[str]
-    ) -> None:
-        self.message = (
-            f"Fields '{' '.join(missing_fields)}' do not exist in "
-            f"context class {context_cls}."
-        )
-        super().__init__(self.message)
+@final
+class NoDefault:
+    pass
 
 
-class CtxVar(Generic[T]):
-    def __init__(self, value: T) -> None:
+class PipeVar(Generic[T]):
+    def __init__(self, value: T | type[NoDefault]) -> None:
         self.__value = value
 
     def get(self) -> T:
-        return self.__value
+        value = self.__value
+        if value is NoDefault:
+            raise NoDefaultError(
+                "Cannot get a value that was not initialized (=NoDefault). "
+                f"If a {self.__class__.__name__} is inititalized with the value "
+                f"{NoDefault.__class__.__name__}, you cannot get it until method "
+                "PipeVar.set([new_value]) is called."
+            )
+        return value
 
     def set(self, value: T):
         self.__value = value
 
     @classmethod
     def new_field(
-        cls, value: T, init: bool = True, repr: bool = True, kw_only: bool = True
+        cls,
+        value: T | type[NoDefault],
+        init: bool = True,
+        repr: bool = True,
+        kw_only: bool = True,
     ) -> Self:
         return field(
             init=init, repr=repr, kw_only=kw_only, default_factory=lambda: cls(value)
@@ -43,13 +54,14 @@ class CtxVar(Generic[T]):
     def type(self) -> type[T]:
         return type(self.__value)
 
-
-OptionalCtxVar = CtxVar[Optional[T]] | CtxVar[T]
+    @property
+    def T(self) -> T:
+        return cast(T, self)
 
 
 @dataclass(slots=True)
 class BasePipelineContext:
-    thread_count = 4
+    thread_count: int = 4
     _thread_lock: Lock = field(init=False, repr=False, default_factory=Lock)
     _fields_: set[str] = field(init=False, repr=False, default_factory=set)
 
@@ -59,3 +71,4 @@ class BasePipelineContext:
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self._thread_lock.release()
+        return
