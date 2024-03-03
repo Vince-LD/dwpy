@@ -52,7 +52,6 @@ class FinalStep(RootStep):
 
 class FuncStep(BaseStep, Generic[P, R]):
     NAME = "Function step"
-    FUNC: Callable[P, R]
 
     def __init__(
         self,
@@ -82,9 +81,7 @@ class FuncStep(BaseStep, Generic[P, R]):
             key: (arg.get() if isinstance(arg, PipeVar) else arg)
             for key, arg in self.kwargs.items()
         }
-        logging.warning(args)
-        logging.warning(kwargs)
-        self._cast_results(self.__class__.FUNC(*args, **kwargs))  # type: ignore
+        self._cast_results(self.function(*args, **kwargs))  # type: ignore
         self.completed()
 
     def _cast_results(self, results: R) -> None:
@@ -124,22 +121,22 @@ class FuncStep(BaseStep, Generic[P, R]):
         )
         return (
             f"Function Step: {self.name}\n"
-            f"{self.FUNC.__name__}\n"
+            f"function: {self.function.__name__}\n"
             f"args: {str_args}\n"
             f"kwargs: {str_kwargs}"
         )
 
+    @property
     @abstractmethod
-    def _implemented(self) -> bool:
-        return False
+    def function(self) -> Callable[P, R]:
+        ...
 
     @classmethod
     def new(cls, func: Callable[P, R]) -> type[Self]:
         class NewFuncStep(cls):
-            FUNC: Callable[P, R] = func
-
-            def _implemented(self) -> bool:
-                return True
+            @property
+            def function(self) -> Callable[P, R]:
+                return func
 
         return NewFuncStep  # type: ignore
 
