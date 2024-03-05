@@ -3,7 +3,7 @@ import time
 from typing import Any, Optional
 
 from tuyau.steps.base_step import BaseStep
-from tuyau.context import BasePipelineContext, PipeVar, NoDefault
+from tuyau.context import BasePipelineContext, InVar, OutVar, PipeVar, NoDefault
 
 import logging
 
@@ -42,9 +42,8 @@ class LogStep(BaseStep[ExampleContext]):
         self.field = field
 
     def run(self, ctx: ExampleContext):
-        with ctx:
-            logging.info(f"Printing the field value: {self.field.get()}")
-            time.sleep(1)
+        logging.info(f"Printing the field value: {self.field.get()}")
+        time.sleep(1)
         self.completed()
 
 
@@ -53,9 +52,9 @@ class AdditionStep(BaseStep[ExampleContext]):
 
     def __init__(
         self,
-        a_field: PipeVar[float],
-        b_field: PipeVar[float],
-        res_field: PipeVar[float],
+        a_field: InVar[float],
+        b_field: InVar[float],
+        res_field: OutVar[float],
         name: str | None = None,
         comment: str = "",
     ) -> None:
@@ -88,9 +87,9 @@ class MutliplyStep(BaseStep[ExampleContext]):
 
     def __init__(
         self,
-        a_field: PipeVar[float],
-        b_field: PipeVar[float],
-        res_field: PipeVar[float],
+        a_field: InVar[float],
+        b_field: InVar[float],
+        res_field: OutVar[float],
         name: str | None = None,
         comment: str = "",
     ) -> None:

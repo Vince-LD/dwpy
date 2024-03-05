@@ -35,16 +35,16 @@ def main():
 
     node1 = PipeNode("Process node 1").add_steps(
         AdditionStep(
-            a_field=context.input_x,
-            b_field=context.input_y,
-            res_field=context.result_step1,
+            a_field=context.input_x.as_input(),
+            b_field=context.input_y.as_input(),
+            res_field=context.result_step1.as_output(),
             name="Step 1.1",
         ),
         LogStep(context.result_step1, name="Step 1.2"),
         MutliplyStep(
-            a_field=context.result_step1,
-            b_field=context.result_step1,
-            res_field=context.result_step1,
+            a_field=context.result_step1.as_input(),
+            b_field=context.result_step1.as_input(),
+            res_field=context.result_step1.as_output(),
             name="Step 1.3",
             comment="Square previous result",
         ),
@@ -55,27 +55,27 @@ def main():
 
     node3 = PipeNode(name="Process node 3").add_steps(
         AdditionStep(
-            a_field=context.input_x,
-            b_field=context.input_y,
-            res_field=context.result_step3,
+            a_field=context.input_x.as_input(),
+            b_field=context.input_y.as_input(),
+            res_field=context.result_step3.as_output(),
             name="Step 3.1",
         )
     )
 
     node4 = PipeNode("Process node 4").add_steps(
         MutliplyStep(
-            a_field=context.input_x,
-            b_field=context.input_x,
-            res_field=context.result_step4,
+            a_field=context.input_x.as_input(),
+            b_field=context.input_x.as_input(),
+            res_field=context.result_step4.as_output(),
             name="Step 4.1",
         )
     )
 
     node5 = PipeNode("Process node 5").add_steps(
         AdditionStep(
-            a_field=context.result_step3,
-            b_field=context.result_step4,
-            res_field=context.result_step5,
+            a_field=context.result_step3.as_input(),
+            b_field=context.result_step4.as_input(),
+            res_field=context.result_step5.as_output(),
             name="Step 5.1",
         ),
         LogStep(context.result_step5, name="result_step5"),
@@ -83,9 +83,9 @@ def main():
 
     node6 = PipeNode("Process node 6").add_steps(
         AdditionStep(
-            a_field=context.result_step1,
-            b_field=context.result_step5,
-            res_field=context.result_step6,
+            a_field=context.result_step1.as_input(),
+            b_field=context.result_step5.as_input(),
+            res_field=context.result_step6.as_output(),
             name="Step 6.1",
         ),
         LogStep(context.result_step6, name="result_step6"),
