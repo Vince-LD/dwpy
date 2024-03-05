@@ -3,7 +3,7 @@ import threading
 from functools import reduce
 from itertools import repeat
 import time
-from typing import Optional, Self
+from typing import Callable, Iterable, Optional, Self, TypeAlias
 from tuyau.steps import BaseStep, StatusEnum, STATUS_PASSED, FinalStep, RootStep
 
 from tuyau.context import BasePipelineContext, ContextT
@@ -13,6 +13,9 @@ import logging
 import graphviz
 
 logging.basicConfig(level=logging.DEBUG)
+
+ParentNode: TypeAlias = "PipeNode"
+ChildNode: TypeAlias = "PipeNode"
 
 
 class PipeNode:
@@ -27,6 +30,9 @@ class PipeNode:
         self.all_parents_executed: threading.Semaphore
         self.update_run_flag()
         self._executed = threading.Event()
+        self.conditions: dict[
+            tuple[ParentNode, ChildNode], list[Callable[[], bool]]
+        ] = {}
 
     def update_run_flag(self):
         required = max(len(self.parent_nodes) - 1, 0)
@@ -57,20 +63,18 @@ class PipeNode:
                 return
 
         self._status = StatusEnum.COMPLETE
-        # for node in self.child_nodes:
-        #     node.all_parents_executed.acquire(blocking=False)
 
     def add_steps(self, *steps: BaseStep) -> Self:
         self.steps.extend(steps)
         return self
 
-    def add_child_nodes(self, *nodes: Self) -> Self:
+    def add_child_nodes(self, *nodes: ChildNode) -> Self:
         self.child_nodes.update(nodes)
         for node in nodes:
             node.update_run_flag()
         return self
 
-    def add_parent_nodes(self, *nodes: Self) -> Self:
+    def add_parent_nodes(self, *nodes: ParentNode) -> Self:
         self.parent_nodes.update(nodes)
         self.update_run_flag()
         return self
@@ -144,8 +148,50 @@ class PipeNode:
     def __hash__(self) -> int:
         return self.id
 
-    def __eq__(self, __value: object) -> bool:
-        return isinstance(__value, self.__class__) and __value.id == self.id
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, self.__class__) and other.id == self.id
+
+    def __lshift__(self, parents: ParentNode | Iterable[ParentNode]) -> "Branch":
+        if isinstance(parents, PipeNode):
+            self.add_parent_nodes(parents)
+            parents.add_child_nodes(self)
+        else:
+            self.add_parent_nodes(*parents)
+            for node in parents:
+                node.add_child_nodes(self)
+        return Branch(parents=parents, children=self)
+
+    def __rshift__(self, children: ChildNode | Iterable[ChildNode]) -> "Branch":
+        if isinstance(children, PipeNode):
+            self.add_child_nodes(children)
+            children.add_parent_nodes(self)
+        else:
+            self.add_child_nodes(*children)
+            for node in children:
+                node.add_parent_nodes(self)
+        return Branch(parents=self, children=children)
+
+
+class Branch:
+    def __init__(
+        self,
+        parents: ParentNode | Iterable[ParentNode],
+        children: ChildNode | Iterable[ChildNode],
+    ) -> None:
+        self.parents = parents if isinstance(parents, Iterable) else (parents,)
+        self.children = children if isinstance(children, Iterable) else (children,)
+
+    def __and__(self, condition: Callable[[], bool]):
+        for c in self.parents:
+            for p in self.parents:
+                p.conditions.setdefault((p, c), []).append(condition)
+                c.conditions.setdefault((p, c), []).append(condition)
+
+    def __not__(self, condition: Callable[[], bool]):
+        for c in self.parents:
+            for p in self.parents:
+                p.conditions.setdefault((p, c), []).append(lambda: not condition())
+                c.conditions.setdefault((p, c), []).append(lambda: not condition())
 
 
 class Pipeline:
@@ -271,8 +317,16 @@ class Pipeline:
     def _keep_running(self):
         return not self.final_node.executed and self.runtime_error is None
 
-    def build(self):
-        pass
+    def build(self, start_nodes: PipeNode | Iterable[PipeNode], *args: Branch):
+        self.start_pipeline_with(*start_nodes)
+        for branch in args:
+            self.add_nodes(*branch.parents)
+            self.add_nodes(*branch.children)
+
+        self.terminate_pipeline()
+
+    def reset(self):
+        raise NotImplementedError("The nodes must be reset (i.e. their locks)")
 
     def graph(self, preview=True) -> graphviz.Digraph:
         pipeline_name = f"{self.name}_preview" if preview else self.name

@@ -23,8 +23,6 @@ def do_something_in_process(a: float, b: float) -> float:
 
 
 def main():
-    pipeline = Pipeline(ExampleContext, "Example Pipeline")
-
     context = ExampleContext(input_x=PipeVar(1.5), input_y=PipeVar(8), thread_count=2)
 
     SquareStep = FuncStep.new(do_something_in_process)
@@ -95,24 +93,38 @@ def main():
         LogStep(context.result_func_step, name="result_func_step"),
     )
 
-    (
-        pipeline.add_children_to(pipeline.root_node, node1, node2)
-        .add_children_to(node2, node3, node4)
-        .add_parents_to(node5, node3, node4)
-        .add_parents_to(node6, node5, node1)
-        .terminate_pipeline()
-    )
-
     directory = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
 
-    graph = pipeline.graph(preview=True)
-    graph.render("example_preview", directory=directory, format="svg")
-    graph.render("example_preview", directory=directory, format="png")
+    # First syntax - Code is commented because right now a pipeline can only be executed
+    # once because the steps remain in their state. This could be fixed with a pipeline
+    # factory for now. Pipeline.reset() will be implemented soon
+    # pipeline1 = Pipeline(ExampleContext, "Example Pipeline 1")
+    # (
+    #     pipeline1.add_children_to(pipeline1.root_node, node1, node2)
+    #     .add_children_to(node2, node3, node4)
+    #     .add_parents_to(node5, node3, node4)
+    #     .add_parents_to(node6, node5, node1)
+    #     .terminate_pipeline()
+    # )
 
-    pipeline.execute(context)
-    graph = pipeline.graph()
-    graph.render("example", directory=directory, format="svg")
-    graph.render("example", directory=directory, format="png")
+    # pipeline1.execute(context)
+    # graph = pipeline1.graph()
+    # graph.render("example1", directory=directory, format="svg")
+    # graph.render("example1", directory=directory, format="png")
+
+    # Second syntax
+    pipeline2 = Pipeline(ExampleContext, "Example Pipeline 2 ")
+    pipeline2.build(
+        (node1, node2),
+        node2 >> (node3, node4),
+        node5 << (node3, node4),
+        node6 << (node1, node5),
+    )
+
+    pipeline2.execute(context)
+    graph = pipeline2.graph()
+    graph.render("example1", directory=directory, format="svg")
+    graph.render("example2", directory=directory, format="png")
 
 
 if __name__ == "__main__":
