@@ -28,9 +28,9 @@ def main():
     SquareStep = FuncStep.new(do_something_in_process)
 
     square_step = SquareStep(
-        result_vars=context.result_func_step,
-        a=context.result_step5.T,
-        b=context.result_step6.T,
+        result_vars=context.result_func_step.as_output(),
+        a=context.result_step5.as_input().T,
+        b=context.result_step6.as_input().T,
     )
 
     node1 = PipeNode("Process node 1").add_steps(

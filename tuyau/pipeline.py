@@ -14,9 +14,6 @@ import graphviz
 
 logging.basicConfig(level=logging.DEBUG)
 
-ParentNode: TypeAlias = "PipeNode"
-ChildNode: TypeAlias = "PipeNode"
-
 
 class PipeNode:
     def __init__(self, name="Node") -> None:
@@ -68,13 +65,13 @@ class PipeNode:
         self.steps.extend(steps)
         return self
 
-    def add_child_nodes(self, *nodes: ChildNode) -> Self:
+    def add_child_nodes(self, *nodes: "ChildNode") -> Self:
         self.child_nodes.update(nodes)
         for node in nodes:
             node.update_run_flag()
         return self
 
-    def add_parent_nodes(self, *nodes: ParentNode) -> Self:
+    def add_parent_nodes(self, *nodes: "ParentNode") -> Self:
         self.parent_nodes.update(nodes)
         self.update_run_flag()
         return self
@@ -151,7 +148,7 @@ class PipeNode:
     def __eq__(self, other: object) -> bool:
         return isinstance(other, self.__class__) and other.id == self.id
 
-    def __lshift__(self, parents: ParentNode | Iterable[ParentNode]) -> "Branch":
+    def __lshift__(self, parents: "ParentNode" | Iterable["ParentNode"]) -> "Branch":
         if isinstance(parents, PipeNode):
             self.add_parent_nodes(parents)
             parents.add_child_nodes(self)
@@ -161,7 +158,7 @@ class PipeNode:
                 node.add_child_nodes(self)
         return Branch(parents=parents, children=self)
 
-    def __rshift__(self, children: ChildNode | Iterable[ChildNode]) -> "Branch":
+    def __rshift__(self, children: "ChildNode" | Iterable["ChildNode"]) -> "Branch":
         if isinstance(children, PipeNode):
             self.add_child_nodes(children)
             children.add_parent_nodes(self)
@@ -170,6 +167,10 @@ class PipeNode:
             for node in children:
                 node.add_parent_nodes(self)
         return Branch(parents=self, children=children)
+
+
+ParentNode: TypeAlias = PipeNode
+ChildNode: TypeAlias = PipeNode
 
 
 class Branch:

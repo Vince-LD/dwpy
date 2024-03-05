@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Generic, ParamSpec, TypeVar
 from enum import Flag, auto
-from tuyau.context import ContextT
+from tuyau.context import ContextT, InOutVar, InVar, OutVar
 
 
 P = ParamSpec("P")
@@ -89,4 +89,18 @@ class BaseStep(ABC, Generic[ContextT]):
         return (
             f"{self.__class__.__name__}: {self.name}"
             f"{'\n' if self.comment else ''}{self.comment}"
+        )
+
+    # TODO: adjust these methods depending on the usage (add recursive type checks?)
+    # Do not hesitate to reimplate in your classes to avoid parsing the obj dict and
+    # directly store your Input/Outputs in an object attribute
+
+    def inputs(self) -> tuple[InVar, ...]:
+        return tuple(
+            value for value in self.__dict__.values() if isinstance(value, InVar)
+        )
+
+    def outputs(self) -> tuple[OutVar, ...]:
+        return tuple(
+            value for value in self.__dict__.values() if isinstance(value, OutVar)
         )

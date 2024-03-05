@@ -58,6 +58,45 @@ class PipeVar(Generic[T]):
     def T(self) -> T:
         return cast(T, self)
 
+    def as_input(self) -> "InVar[T]":
+        return InVar(self)
+
+    def as_output(self) -> "OutVar[T]":
+        return OutVar(self)
+
+    def as_inout(self) -> "InOutVar[T]":
+        return InOutVar(self)
+
+
+class _IOVar(Generic[T]):
+    def __init__(self, var: PipeVar[T]) -> None:
+        self._var = var
+
+    @property
+    def T(self) -> T:
+        return cast(T, self._var)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self._var})"
+
+
+class InVar(_IOVar[T]):
+    def get(self) -> T:
+        return self._var.get()
+
+
+class OutVar(_IOVar[T]):
+    def set(self, value: T):
+        self._var.set(value)
+
+
+class InOutVar(InVar[T], OutVar[T]):
+    def get(self) -> T:
+        return self._var.get()
+
+    def set(self, value: T):
+        self._var.set(value)
+
 
 @dataclass(slots=True)
 class BasePipelineContext:
