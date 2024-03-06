@@ -72,6 +72,9 @@ class _IOVar(Generic[T]):
     def __init__(self, var: PipeVar[T]) -> None:
         self._var = var
 
+    def as_pipevar(self) -> PipeVar[T]:
+        return self._var
+
     @property
     def T(self) -> T:
         return cast(T, self._var)
