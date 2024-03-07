@@ -3,7 +3,7 @@ import threading
 from functools import reduce
 from itertools import repeat
 import time
-from typing import Callable, Iterable, Optional, Self, TypeAlias
+from typing import Callable, Iterable, Optional, Self, TypeAlias, TypeVar, Union
 from tuyau.exceptions import ConditionError
 from tuyau.steps import BaseStep, StatusEnum, STATUS_PASSED, FinalStep, RootStep
 
@@ -16,6 +16,7 @@ import graphviz
 logging.basicConfig(level=logging.DEBUG)
 
 ConditionExpr = Callable[[], bool]
+NodeOrNodeCompT = TypeVar("NodeOrNodeCompT", bound=Union["PipeNode", "NodeComp"])
 
 
 class PipeNode:
@@ -162,41 +163,76 @@ class PipeNode:
     def __hash__(self) -> int:
         return self.id
 
+    # TODO refactor theses dunder methods and the corresponding ones in NodeComp
+    # to avoid repetitions
     def __eq__(self, other: object) -> bool:
         return isinstance(other, self.__class__) and other.id == self.id
 
-    def __lshift__(self, parents: "ParentNode" | Iterable["ParentNode"]) -> "Branches":
-        parents_ = parents if isinstance(parents, Iterable) else (parents,)
-        self.add_parent_nodes(*parents)
-        for node in parents_:
-            node.add_child_nodes(self)
-        return Branches(nodes=parents_)
+    def __rshift__(self, other: "NodeOrNodeCompT") -> "NodeOrNodeCompT":
+        match other:
+            case PipeNode():
+                self.add_child_nodes(other)
+                other.add_parent_nodes(self)
+            case NodeComp():
+                self.add_child_nodes(*other.nodes)
+                for node in other.nodes:
+                    node.add_parent_nodes(self)
+        return other
 
-    def __rshift__(self, children: "ChildNode" | Iterable["ChildNode"]) -> "Branches":
-        children_ = children if isinstance(children, Iterable) else (children,)
-        self.add_child_nodes(*children)
-        for node in children_:
-            node.add_parent_nodes(self)
-        return Branches(nodes=children)
+    def __and__(self, other: Self) -> "NodeComp":
+        return NodeComp((self, other))
+
+    def __or__(self, other: ConditionExpr | tuple[ConditionExpr]) -> Self:
+        match other:
+            case [*_]:
+                self.conditions.extend(other)
+            case _:
+                self.conditions.append(other)
+        return self
 
 
 ParentNode: TypeAlias = PipeNode
 ChildNode: TypeAlias = PipeNode
 
 
-class Branches:
+class NodeComp:
     def __init__(
         self,
-        nodes: PipeNode | Iterable[PipeNode],
+        nodes: Iterable[PipeNode],
     ) -> None:
-        self.nodes = nodes if isinstance(nodes, Iterable) else (nodes,)
+        self.nodes: list[PipeNode] = list(nodes)
 
-    def __and__(self, conditions: ConditionExpr | Iterable[ConditionExpr]):
-        conditions_: Iterable[ConditionExpr] = (
-            conditions if isinstance(conditions, Iterable) else (conditions,)
-        )
-        for node in self.nodes:
-            node.conditions.extend(conditions_)
+    # TODO refactor theses dunder methods and the corresponding ones in PipeNode
+    # to avoid repetitions
+    def __and__(self, other: PipeNode):
+        match other:
+            case PipeNode():
+                self.nodes.append(other)
+            case NodeComp():
+                self.nodes.extend(other.nodes)
+        return self
+
+    def __rshift__(self, other: NodeOrNodeCompT) -> NodeOrNodeCompT:
+        match other:
+            case PipeNode():
+                for step in self.nodes:
+                    step.add_child_nodes(other)
+                    other.add_parent_nodes(*self.nodes)
+            case NodeComp():
+                for step in self.nodes:
+                    step.add_child_nodes(*other.nodes)
+                    for node in other.nodes:
+                        node.add_parent_nodes(*self.nodes)
+        return other
+
+    def __or__(self, other: ConditionExpr | tuple[ConditionExpr, ...]):
+        match other:
+            case [*_]:
+                for step in self.nodes:
+                    step.conditions.extend(other)
+            case _:
+                for step in self.nodes:
+                    step.conditions.append(other)
         return self
 
 
@@ -216,8 +252,6 @@ class Pipeline:
         self.final_node.add_steps(FinalStep(context_class))
         self.add_nodes(self.root_node, self.final_node)
 
-        # self._async_loop = asyncio.get_event_loop()
-        # self._coro_pool_count = asyncio.Semaphore(4)
         self.default_thread_count = 4
 
         self.remaining_nodes = threading.Semaphore(len(self.nodes))
@@ -323,7 +357,9 @@ class Pipeline:
     def _keep_running(self):
         return not self.final_node.executed and self.runtime_error is None
 
-    def build(self, start_nodes: PipeNode | Iterable[PipeNode], *args: Branches):
+    def build(
+        self, start_nodes: PipeNode | Iterable[PipeNode], *args: PipeNode | NodeComp
+    ):
         self.start_pipeline_with(*start_nodes)
         self.register_nodes_from(self.root_node)
         self.terminate_pipeline()

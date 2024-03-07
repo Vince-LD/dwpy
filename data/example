@@ -1,7 +1,9 @@
 strict digraph "Example Pipeline_preview" {
-	subgraph cluster_2371801224624 {
+	compound=true splines=curved
+	subgraph cluster_1588564354416 {
 		color=grey label="Example Pipeline"
-		2371838444224 [label="ExampleContext(thread_count=4,
+		1588564354608 [label="ExampleContext
+thread_count=4,
                input_x=0.0,
                input_y=0.0,
                result_step1=<class 'tuyau.context.NoDefault'>,
@@ -10,41 +12,42 @@ strict digraph "Example Pipeline_preview" {
                result_step5=<class 'tuyau.context.NoDefault'>,
                result_step6=<class 'tuyau.context.NoDefault'>,
                result_step7=<class 'tuyau.context.NoDefault'>,
-               result_func_step=<class 'tuyau.context.NoDefault'>)" comment="" shape=plaintext]
+               result_func_step=<class 'tuyau.context.NoDefault'>" comment="" shape=plaintext]
 	}
-	subgraph cluster_2371801814976 {
+	subgraph cluster_1588564073488 {
 		color=grey label="Process node 1"
-		2371838691664 [label="AdditionStep: Step 1.1
+		1588564079392 [label="AdditionStep: Step 1.1
 result: 9.5" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838691712 [label="LogStep: Step 1.2" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838691664 -> 2371838691712
-		2371838691760 [label="MutliplyStep: Step 1.3
+		1588564074352 [label="LogStep: Step 1.2" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
+		1588564079392 -> 1588564074352
+		1588564217008 [label="MutliplyStep: Step 1.3
 Square previous result
 result: 90.25" bgcolor=darkolivegreen3 color=darkgreen comment="Square previous result" shape=box style=rounded]
-		2371838691712 -> 2371838691760
-		2371838691808 [label="LogStep: Step 1.2" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838691760 -> 2371838691808
+		1588564074352 -> 1588564217008
+		1588564217632 [label="LogStep: Step 1.2" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
+		1588564217008 -> 1588564217632
 	}
-	2371838444224 -> 2371838691664 [lhead=cluster_2371801814976 ltail=cluster_2371801224624]
-	subgraph cluster_2371838693008 {
+	1588564354608 -> 1588564079392 [lhead=cluster_1588564073488 ltail=cluster_1588564354416]
+	subgraph cluster_1588564353792 {
 		color=grey label="Process node 6"
-		2371838693248 [label="AdditionStep: Step 6.1
+		1588564354176 [label="AdditionStep: Step 6.1
 result: 102.0" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838693296 [label="LogStep: result_step6" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838693248 -> 2371838693296
-		2371838691520 [label="Function Step: Function step
+		1588564354224 [label="LogStep: result_step6" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
+		1588564354176 -> 1588564354224
+		1588564073248 [label="Function Step: Function step
 function: do_something_in_process
 args: 
 kwargs: a=11.75, b=102.0" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838693296 -> 2371838691520
-		2371838693344 [label="LogStep: result_func_step" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838691520 -> 2371838693344
+		1588564354224 -> 1588564073248
+		1588564354272 [label="LogStep: result_func_step" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
+		1588564073248 -> 1588564354272
 	}
-	2371838692960 -> 2371838693248 [lhead=cluster_2371838693008 ltail=cluster_2371801225632]
-	2371838691808 -> 2371838693248 [lhead=cluster_2371838693008 ltail=cluster_2371801814976]
-	subgraph cluster_2371838450224 {
+	1588564217632 -> 1588564354176 [lhead=cluster_1588564353792 ltail=cluster_1588564073488]
+	1588564353744 -> 1588564354176 [lhead=cluster_1588564353792 ltail=cluster_1588564353312]
+	subgraph cluster_1588564355088 {
 		color=grey label="FINAL NODE"
-		2371838456512 [label="ExampleContext(thread_count=2,
+		1588564355328 [label="ExampleContext
+thread_count=2,
                input_x=1.5,
                input_y=8,
                result_step1=90.25,
@@ -53,48 +56,49 @@ kwargs: a=11.75, b=102.0" bgcolor=darkolivegreen3 color=darkgreen comment="" sha
                result_step5=11.75,
                result_step6=102.0,
                result_step7=<class 'tuyau.context.NoDefault'>,
-               result_func_step=10542.0625)" comment="" shape=plaintext]
+               result_func_step=10542.0625" comment="" shape=plaintext]
 	}
-	2371838693344 -> 2371838456512 [lhead=cluster_2371838450224 ltail=cluster_2371838693008]
-	subgraph cluster_2371838691856 {
+	1588564354272 -> 1588564355328 [lhead=cluster_1588564355088 ltail=cluster_1588564353792]
+	subgraph cluster_1588564217728 {
 		color=grey label="Process node 2"
-		2371838692096 [label="SkipStep: Skip step 2" color=grey comment="" shape=box style=rounded]
+		1588564348464 [label="SkipStep: Skip step 2" color=grey comment="" shape=box style=rounded]
 	}
-	2371838444224 -> 2371838692096 [lhead=cluster_2371838691856 ltail=cluster_2371801224624]
-	subgraph cluster_2371838692144 {
+	1588564354608 -> 1588564348464 [lhead=cluster_1588564217728 ltail=cluster_1588564354416]
+	subgraph cluster_1588564348512 {
 		color=grey label="Process node 3"
-		2371838692384 [label="AdditionStep: Step 3.1
+		1588564352736 [label="AdditionStep: Step 3.1
 result: 9.5" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
 	}
-	2371838692096 -> 2371838692384 [lhead=cluster_2371838692144 ltail=cluster_2371838691856]
-	subgraph cluster_2371801225632 {
+	1588564348464 -> 1588564352736 [lhead=cluster_1588564348512 ltail=cluster_1588564217728]
+	subgraph cluster_1588564353312 {
 		color=grey label="Process node 5"
-		2371838692912 [label="AdditionStep: Step 5.1
+		1588564353696 [label="AdditionStep: Step 5.1
 result: 11.75" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838692960 [label="LogStep: result_step5" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838692912 -> 2371838692960
+		1588564353744 [label="LogStep: result_step5" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
+		1588564353696 -> 1588564353744
 	}
-	2371838692384 -> 2371838692912 [lhead=cluster_2371801225632 ltail=cluster_2371838692144]
-	2371838692672 -> 2371838692912 [lhead=cluster_2371801225632 ltail=cluster_2371838692432]
-	subgraph cluster_2371838693008 {
+	1588564352736 -> 1588564353696 [lhead=cluster_1588564353312 ltail=cluster_1588564348512]
+	1588564353264 -> 1588564353696 [lhead=cluster_1588564353312 ltail=cluster_1588564352832]
+	subgraph cluster_1588564353792 {
 		color=grey label="Process node 6"
-		2371838693248 [label="AdditionStep: Step 6.1
+		1588564354176 [label="AdditionStep: Step 6.1
 result: 102.0" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838693296 [label="LogStep: result_step6" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838693248 -> 2371838693296
-		2371838691520 [label="Function Step: Function step
+		1588564354224 [label="LogStep: result_step6" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
+		1588564354176 -> 1588564354224
+		1588564073248 [label="Function Step: Function step
 function: do_something_in_process
 args: 
 kwargs: a=11.75, b=102.0" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838693296 -> 2371838691520
-		2371838693344 [label="LogStep: result_func_step" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838691520 -> 2371838693344
+		1588564354224 -> 1588564073248
+		1588564354272 [label="LogStep: result_func_step" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
+		1588564073248 -> 1588564354272
 	}
-	2371838692960 -> 2371838693248 [lhead=cluster_2371838693008 ltail=cluster_2371801225632]
-	2371838691808 -> 2371838693248 [lhead=cluster_2371838693008 ltail=cluster_2371801814976]
-	subgraph cluster_2371838450224 {
+	1588564217632 -> 1588564354176 [lhead=cluster_1588564353792 ltail=cluster_1588564073488]
+	1588564353744 -> 1588564354176 [lhead=cluster_1588564353792 ltail=cluster_1588564353312]
+	subgraph cluster_1588564355088 {
 		color=grey label="FINAL NODE"
-		2371838456512 [label="ExampleContext(thread_count=2,
+		1588564355328 [label="ExampleContext
+thread_count=2,
                input_x=1.5,
                input_y=8,
                result_step1=90.25,
@@ -103,43 +107,44 @@ kwargs: a=11.75, b=102.0" bgcolor=darkolivegreen3 color=darkgreen comment="" sha
                result_step5=11.75,
                result_step6=102.0,
                result_step7=<class 'tuyau.context.NoDefault'>,
-               result_func_step=10542.0625)" comment="" shape=plaintext]
+               result_func_step=10542.0625" comment="" shape=plaintext]
 	}
-	2371838693344 -> 2371838456512 [lhead=cluster_2371838450224 ltail=cluster_2371838693008]
-	subgraph cluster_2371838692432 {
+	1588564354272 -> 1588564355328 [lhead=cluster_1588564355088 ltail=cluster_1588564353792]
+	subgraph cluster_1588564352832 {
 		color=grey label="Process node 4"
-		2371838692672 [label="MutliplyStep: Step 4.1
+		1588564353264 [label="MutliplyStep: Step 4.1
 result: 2.25" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
 	}
-	2371838692096 -> 2371838692672 [lhead=cluster_2371838692432 ltail=cluster_2371838691856]
-	subgraph cluster_2371801225632 {
+	1588564348464 -> 1588564353264 [lhead=cluster_1588564352832 ltail=cluster_1588564217728]
+	subgraph cluster_1588564353312 {
 		color=grey label="Process node 5"
-		2371838692912 [label="AdditionStep: Step 5.1
+		1588564353696 [label="AdditionStep: Step 5.1
 result: 11.75" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838692960 [label="LogStep: result_step5" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838692912 -> 2371838692960
+		1588564353744 [label="LogStep: result_step5" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
+		1588564353696 -> 1588564353744
 	}
-	2371838692384 -> 2371838692912 [lhead=cluster_2371801225632 ltail=cluster_2371838692144]
-	2371838692672 -> 2371838692912 [lhead=cluster_2371801225632 ltail=cluster_2371838692432]
-	subgraph cluster_2371838693008 {
+	1588564352736 -> 1588564353696 [lhead=cluster_1588564353312 ltail=cluster_1588564348512]
+	1588564353264 -> 1588564353696 [lhead=cluster_1588564353312 ltail=cluster_1588564352832]
+	subgraph cluster_1588564353792 {
 		color=grey label="Process node 6"
-		2371838693248 [label="AdditionStep: Step 6.1
+		1588564354176 [label="AdditionStep: Step 6.1
 result: 102.0" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838693296 [label="LogStep: result_step6" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838693248 -> 2371838693296
-		2371838691520 [label="Function Step: Function step
+		1588564354224 [label="LogStep: result_step6" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
+		1588564354176 -> 1588564354224
+		1588564073248 [label="Function Step: Function step
 function: do_something_in_process
 args: 
 kwargs: a=11.75, b=102.0" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838693296 -> 2371838691520
-		2371838693344 [label="LogStep: result_func_step" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
-		2371838691520 -> 2371838693344
+		1588564354224 -> 1588564073248
+		1588564354272 [label="LogStep: result_func_step" bgcolor=darkolivegreen3 color=darkgreen comment="" shape=box style=rounded]
+		1588564073248 -> 1588564354272
 	}
-	2371838692960 -> 2371838693248 [lhead=cluster_2371838693008 ltail=cluster_2371801225632]
-	2371838691808 -> 2371838693248 [lhead=cluster_2371838693008 ltail=cluster_2371801814976]
-	subgraph cluster_2371838450224 {
+	1588564217632 -> 1588564354176 [lhead=cluster_1588564353792 ltail=cluster_1588564073488]
+	1588564353744 -> 1588564354176 [lhead=cluster_1588564353792 ltail=cluster_1588564353312]
+	subgraph cluster_1588564355088 {
 		color=grey label="FINAL NODE"
-		2371838456512 [label="ExampleContext(thread_count=2,
+		1588564355328 [label="ExampleContext
+thread_count=2,
                input_x=1.5,
                input_y=8,
                result_step1=90.25,
@@ -148,7 +153,7 @@ kwargs: a=11.75, b=102.0" bgcolor=darkolivegreen3 color=darkgreen comment="" sha
                result_step5=11.75,
                result_step6=102.0,
                result_step7=<class 'tuyau.context.NoDefault'>,
-               result_func_step=10542.0625)" comment="" shape=plaintext]
+               result_func_step=10542.0625" comment="" shape=plaintext]
 	}
-	2371838693344 -> 2371838456512 [lhead=cluster_2371838450224 ltail=cluster_2371838693008]
+	1588564354272 -> 1588564355328 [lhead=cluster_1588564355088 ltail=cluster_1588564353792]
 }

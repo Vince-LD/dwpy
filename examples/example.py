@@ -102,15 +102,15 @@ def main():
     pipeline2.build(
         (node1, node2),
         (
-            node2 >> (node3, node4)
+            node2 >> (node3 & node4)
             # Some basic unnecessary conditions
-            & (
+            | (
                 lambda: node2.status is StatusEnum.COMPLETE,
                 lambda: node2.status is not StatusEnum.ERROR,
             )
         ),
-        node5 << (node3, node4),
-        node6 << (node1, node5),
+        (node3 & node4) >> node5,
+        (node1 & node5) >> node6,
     )
 
     graph = pipeline2.graph(preview=True)
