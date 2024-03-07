@@ -4,6 +4,7 @@ from functools import reduce
 from itertools import repeat
 import time
 from typing import Callable, Iterable, Optional, Self, TypeAlias
+from tuyau.exceptions import ConditionError
 from tuyau.steps import BaseStep, StatusEnum, STATUS_PASSED, FinalStep, RootStep
 
 from tuyau.context import BasePipelineContext, ContextT
@@ -13,6 +14,8 @@ import logging
 import graphviz
 
 logging.basicConfig(level=logging.DEBUG)
+
+ConditionExpr = Callable[[], bool]
 
 
 class PipeNode:
@@ -27,9 +30,7 @@ class PipeNode:
         self.all_parents_executed: threading.Semaphore
         self.update_run_flag()
         self._executed = threading.Event()
-        self.conditions: dict[
-            tuple[ParentNode, ChildNode], list[Callable[[], bool]]
-        ] = {}
+        self.conditions: list[ConditionExpr] = []
 
     def update_run_flag(self):
         required = max(len(self.parent_nodes) - 1, 0)
@@ -43,7 +44,10 @@ class PipeNode:
         if self.executed:
             return
 
-        self._executed.set()
+        # If just one condition is false, the step should error out, skip step
+        if not self.check_conditions:
+            self._executed.set()
+            return
 
         for step in self.steps:
             try:
@@ -59,7 +63,20 @@ class PipeNode:
                 self._status = StatusEnum.ERROR
                 return
 
+        self._executed.set()
         self._status = StatusEnum.COMPLETE
+
+    def check_conditions(self) -> bool:
+        exec_conditions = [condition() for condition in self.conditions]
+        is_conditions_ok = all(exec_conditions)
+
+        if not is_conditions_ok:
+            self._status = StatusEnum.ERROR
+            self._error = ConditionError(
+                f"One or more condition are not met: {exec_conditions}"
+            )
+
+        return is_conditions_ok
 
     def add_steps(self, *steps: BaseStep) -> Self:
         self.steps.extend(steps)
@@ -148,51 +165,39 @@ class PipeNode:
     def __eq__(self, other: object) -> bool:
         return isinstance(other, self.__class__) and other.id == self.id
 
-    def __lshift__(self, parents: "ParentNode" | Iterable["ParentNode"]) -> "Branch":
-        if isinstance(parents, PipeNode):
-            self.add_parent_nodes(parents)
-            parents.add_child_nodes(self)
-        else:
-            self.add_parent_nodes(*parents)
-            for node in parents:
-                node.add_child_nodes(self)
-        return Branch(parents=parents, children=self)
+    def __lshift__(self, parents: "ParentNode" | Iterable["ParentNode"]) -> "Branches":
+        parents_ = parents if isinstance(parents, Iterable) else (parents,)
+        self.add_parent_nodes(*parents)
+        for node in parents_:
+            node.add_child_nodes(self)
+        return Branches(nodes=parents_)
 
-    def __rshift__(self, children: "ChildNode" | Iterable["ChildNode"]) -> "Branch":
-        if isinstance(children, PipeNode):
-            self.add_child_nodes(children)
-            children.add_parent_nodes(self)
-        else:
-            self.add_child_nodes(*children)
-            for node in children:
-                node.add_parent_nodes(self)
-        return Branch(parents=self, children=children)
+    def __rshift__(self, children: "ChildNode" | Iterable["ChildNode"]) -> "Branches":
+        children_ = children if isinstance(children, Iterable) else (children,)
+        self.add_child_nodes(*children)
+        for node in children_:
+            node.add_parent_nodes(self)
+        return Branches(nodes=children)
 
 
 ParentNode: TypeAlias = PipeNode
 ChildNode: TypeAlias = PipeNode
 
 
-class Branch:
+class Branches:
     def __init__(
         self,
-        parents: ParentNode | Iterable[ParentNode],
-        children: ChildNode | Iterable[ChildNode],
+        nodes: PipeNode | Iterable[PipeNode],
     ) -> None:
-        self.parents = parents if isinstance(parents, Iterable) else (parents,)
-        self.children = children if isinstance(children, Iterable) else (children,)
+        self.nodes = nodes if isinstance(nodes, Iterable) else (nodes,)
 
-    def __and__(self, condition: Callable[[], bool]):
-        for c in self.parents:
-            for p in self.parents:
-                p.conditions.setdefault((p, c), []).append(condition)
-                c.conditions.setdefault((p, c), []).append(condition)
-
-    def __not__(self, condition: Callable[[], bool]):
-        for c in self.parents:
-            for p in self.parents:
-                p.conditions.setdefault((p, c), []).append(lambda: not condition())
-                c.conditions.setdefault((p, c), []).append(lambda: not condition())
+    def __and__(self, conditions: ConditionExpr | Iterable[ConditionExpr]):
+        conditions_: Iterable[ConditionExpr] = (
+            conditions if isinstance(conditions, Iterable) else (conditions,)
+        )
+        for node in self.nodes:
+            node.conditions.extend(conditions_)
+        return self
 
 
 class Pipeline:
@@ -318,13 +323,30 @@ class Pipeline:
     def _keep_running(self):
         return not self.final_node.executed and self.runtime_error is None
 
-    def build(self, start_nodes: PipeNode | Iterable[PipeNode], *args: Branch):
+    def build(self, start_nodes: PipeNode | Iterable[PipeNode], *args: Branches):
         self.start_pipeline_with(*start_nodes)
-        for branch in args:
-            self.add_nodes(*branch.parents)
-            self.add_nodes(*branch.children)
-
+        self.register_nodes_from(self.root_node)
         self.terminate_pipeline()
+
+    def register_nodes_from(self, start_node: PipeNode):
+        self._map(start_node, lambda pl, node: pl.nodes.add(node), set())
+
+    # TODO maybe add map method to the PipeNode class directly
+    def map_pipeline(self, func: Callable[[Self, PipeNode], None]):
+        self._map(self.root_node, func, set())
+
+    def _map(
+        self,
+        node: PipeNode,
+        func: Callable[[Self, PipeNode], None],
+        visited: set[PipeNode],
+    ):
+        func(self, node)
+        for child in node.child_nodes:
+            if child in visited:
+                continue
+            visited.add(child)
+            self._map(child, func, visited)
 
     def reset(self):
         raise NotImplementedError("The nodes must be reset (i.e. their locks)")
@@ -332,7 +354,7 @@ class Pipeline:
     def graph(self, preview=True) -> graphviz.Digraph:
         pipeline_name = f"{self.name}_preview" if preview else self.name
         graph = graphviz.Digraph(pipeline_name, strict=True)
-        # graph.attr(compound="true", splines="curved")
+        graph.attr(compound="true", splines="curved")
         self._graph(self.root_node, graph)
         return graph
 

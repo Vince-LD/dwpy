@@ -11,6 +11,8 @@ from tuyau.steps import FuncStep
 from tuyau.context import PipeVar
 from multiprocessing import Pool
 
+from tuyau.steps.base_step import StatusEnum
+
 
 def square(a: float) -> float:
     return a**2
@@ -95,36 +97,29 @@ def main():
 
     directory = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
 
-    # First syntax - Code is commented because right now a pipeline can only be executed
-    # once because the steps remain in their state. This could be fixed with a pipeline
-    # factory for now. Pipeline.reset() will be implemented soon
-    # pipeline1 = Pipeline(ExampleContext, "Example Pipeline 1")
-    # (
-    #     pipeline1.add_children_to(pipeline1.root_node, node1, node2)
-    #     .add_children_to(node2, node3, node4)
-    #     .add_parents_to(node5, node3, node4)
-    #     .add_parents_to(node6, node5, node1)
-    #     .terminate_pipeline()
-    # )
-
-    # pipeline1.execute(context)
-    # graph = pipeline1.graph()
-    # graph.render("example1", directory=directory, format="svg")
-    # graph.render("example1", directory=directory, format="png")
-
     # Second syntax
-    pipeline2 = Pipeline(ExampleContext, "Example Pipeline 2 ")
+    pipeline2 = Pipeline(ExampleContext, "Example Pipeline")
     pipeline2.build(
         (node1, node2),
-        node2 >> (node3, node4),
+        (
+            node2 >> (node3, node4)
+            # Some basic unnecessary conditions
+            & (
+                lambda: node2.status is StatusEnum.COMPLETE,
+                lambda: node2.status is not StatusEnum.ERROR,
+            )
+        ),
         node5 << (node3, node4),
         node6 << (node1, node5),
     )
 
+    graph = pipeline2.graph(preview=True)
+    graph.render("example_preview", directory=directory, format="svg")
+
     pipeline2.execute(context)
     graph = pipeline2.graph()
-    graph.render("example1", directory=directory, format="svg")
-    graph.render("example2", directory=directory, format="png")
+    graph.render("example", directory=directory, format="svg")
+    graph.render("example", directory=directory, format="png")
 
 
 if __name__ == "__main__":
