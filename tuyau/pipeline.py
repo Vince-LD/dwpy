@@ -5,7 +5,7 @@ from itertools import repeat
 import time
 from typing import Callable, Iterable, Optional, Self, TypeAlias, TypeVar, Union
 from tuyau.exceptions import ConditionError
-from tuyau.steps import BaseStep, StatusEnum, STATUS_PASSED, FinalStep, RootStep
+from tuyau.steps import BaseStep, StatusEnum, FinalStep, RootStep
 
 from tuyau.context import BasePipelineContext, ContextT
 import logging
@@ -53,7 +53,7 @@ class PipeNode:
         for step in self.steps:
             try:
                 step.run(ctx)
-                if not bool(step.status & STATUS_PASSED):
+                if not bool(step.status & StatusEnum.OK):
                     self._status = StatusEnum.ERROR
                     self._error = step.error
                     logging.exception(step.error)
@@ -72,7 +72,7 @@ class PipeNode:
         is_conditions_ok = all(exec_conditions)
 
         if not is_conditions_ok:
-            self._status = StatusEnum.ERROR
+            self._status = StatusEnum.CONDITION_FAILED
             self._error = ConditionError(
                 f"One or more condition are not met: {exec_conditions}"
             )
@@ -99,7 +99,7 @@ class PipeNode:
 
     def _all_previous_complete(self) -> bool:
         return reduce(
-            lambda bool_, node: bool_ and bool(node.status & STATUS_PASSED),
+            lambda bool_, node: bool_ and bool(node.status & StatusEnum.OK),
             self.parent_nodes,
             True,
         )
@@ -340,16 +340,16 @@ class Pipeline:
         if node.status is not StatusEnum.UNKNOWN:
             return
 
-        if not bool(node.status & STATUS_PASSED):
+        if not bool(node.status & StatusEnum.OK):
             node.run(ctx)
 
         if not node.executed:
             return
 
-        if bool(node.status & STATUS_PASSED):
+        if bool(node.status & StatusEnum.OK):
             self.remaining_nodes.acquire(blocking=False)
 
-        elif node.status is StatusEnum.ERROR:
+        elif node.status is StatusEnum.KO:
             self.runtime_error = node.error
             return
         executor.map(self._parse_run, repeat(ctx), node.child_nodes, repeat(executor))

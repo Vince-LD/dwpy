@@ -115,6 +115,7 @@ def main():
 
     graph = pipeline2.graph(preview=True)
     graph.render("example_preview", directory=directory, format="svg")
+    graph.render("example_preview", directory=directory, format="png")
 
     pipeline2.execute(context)
     graph = pipeline2.graph()

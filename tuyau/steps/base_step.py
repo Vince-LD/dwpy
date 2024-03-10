@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Generic, ParamSpec, TypeVar
 from enum import Flag, auto
-from tuyau.context import ContextT, InOutVar, InVar, OutVar
+from tuyau.context import ContextT, InVar, OutVar
 
 
 P = ParamSpec("P")
@@ -13,10 +13,10 @@ class StatusEnum(Flag):
     RUNNING = auto()
     COMPLETE = auto()
     SKIPPED = auto()
+    CONDITION_FAILED = auto()
     ERROR = auto()
-
-
-STATUS_PASSED = StatusEnum.COMPLETE | StatusEnum.SKIPPED
+    OK = COMPLETE | SKIPPED
+    KO = ERROR | CONDITION_FAILED
 
 
 class BaseStep(ABC, Generic[ContextT]):
@@ -25,18 +25,22 @@ class BaseStep(ABC, Generic[ContextT]):
         StatusEnum.UNKNOWN: {"shape": "box", "color": "black", "style": "rounded"},
         StatusEnum.RUNNING: {
             "shape": "box",
-            "color": "dodgerblue4",
+            "color": "blue",
             "style": "rounded",
-            "bgcolor": "dodgerblue2",
         },
         StatusEnum.COMPLETE: {
             "shape": "box",
-            "color": "darkgreen",
+            "color": "green",
             "style": "rounded",
-            "bgcolor": "darkolivegreen3",
+            "bgcolor": "lightgreen",
         },
         StatusEnum.SKIPPED: {"shape": "box", "color": "grey", "style": "rounded"},
         StatusEnum.ERROR: {"shape": "box", "color": "red", "style": "rounded"},
+        StatusEnum.CONDITION_FAILED: {
+            "shape": "box",
+            "color": "orange",
+            "style": "rounded",
+        },
     }
     DEFAULT_STYLE: dict[str, str] = {}
     COMMENT = ""
