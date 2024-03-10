@@ -30,8 +30,13 @@ class RootStep(BaseStep[ContextT]):
         self.completed()
 
     def label(self) -> str:
-        flabel = pprint.pformat(self.ctx)
-        return "\n".join(flabel.rstrip(")").split("(", 1))
+        # flabel = pprint.pformat(self.ctx)
+        flabel = str(self.ctx).rstrip(")")
+        cls_name, fields_ = flabel.split("(", 1)
+        split_fields = fields_.split(",")
+        label = "\n".join([cls_name, *split_fields])
+
+        return label
 
 
 class FinalStep(RootStep):
