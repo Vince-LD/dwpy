@@ -4,7 +4,7 @@
 
 A python library to build, validate and run simple, parallelized and blazingly fast pipelines using a graph structure!
 
-This library makes extensive use of type hinting and requires python 3.11 or newer. I highly recommand enabling your type-checker on your IDE and to use Pyright/Pylance (not tester with mypy) to have a more enjoyable experience. 
+This library makes extensive use of type hinting and requires python 3.11 or newer. I highly recommand enabling your type-checker in your IDE and to use Pyright/Pylance (not tested with mypy) to have a more enjoyable experience. 
 
 <img src="https://media1.tenor.com/m/pqqewW40Bi8AAAAC/pacha-okay.gif" width="200" height="200"/>
 
