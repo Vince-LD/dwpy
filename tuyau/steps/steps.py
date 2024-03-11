@@ -1,10 +1,8 @@
 from abc import abstractmethod
-import logging
-import pprint
 from typing import Any, Callable, Generic, ParamSpec, Self, TypeVar
 from tuyau.context import BasePipelineContext, ContextT
 from tuyau.steps.base_step import BaseStep
-from tuyau.context import PipeVar
+from tuyau.context import PipeVar, InVar, OutVar
 
 
 P = ParamSpec("P")
@@ -30,20 +28,13 @@ class RootStep(BaseStep[ContextT]):
         self.completed()
 
     def label(self) -> str:
-        # return f"{pformat(ctx)}"
-        # lines: list[str] = [f"{self.context_class.__name__}:"]
-        # for field, (value, type_) in self.values.items():
-        #     lines.append(f" - {field}: {type_.__name__} = {value}")
-        return pprint.pformat(self.ctx)
+        # flabel = pprint.pformat(self.ctx)
+        flabel = str(self.ctx).rstrip(")")
+        cls_name, fields_ = flabel.split("(", 1)
+        split_fields = fields_.split(",")
+        label = "\n".join([cls_name, *split_fields])
 
-    # def set_values(self, ctx: ContextT):
-    #     for field in fields(ctx):
-    #         if field.init:
-    #             v = getattr(ctx, field.name)
-    #             if isinstance(v, PipeVar):
-    #                 self.values[field.name] = (v.get(), v.type())
-    #             else:
-    #                 self.values[field.name] = (v, type(v))
+        return label
 
 
 class FinalStep(RootStep):
@@ -59,22 +50,24 @@ class FuncStep(BaseStep, Generic[P, R]):
 
     def __init__(
         self,
-        result_vars: PipeVar[R] | tuple[PipeVar, ...],
+        result_vars: OutVar[R] | tuple[OutVar, ...],
         name: str | None = None,
         comment: str = "",
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> None:
         super().__init__(name=name, comment=comment)
-        assert self._is_PipeVar_tuple(result_vars) or self._is_PipeVar(result_vars)
-        self._outputs: tuple[PipeVar, ...] = (
+        self._outputs: tuple[OutVar, ...] = (
             result_vars
             if isinstance(result_vars, tuple)
-            and all(isinstance(f, PipeVar) for f in result_vars)
+            and all(isinstance(f, OutVar) for f in result_vars)
             else (result_vars,)
         )  # type: ignore
         self.args = args
         self.kwargs = kwargs
+        self._inputs = tuple(var for var in args if isinstance(var, InVar)) + tuple(
+            var for var in kwargs.values() if isinstance(var, InVar)
+        )
         super().__init__()
 
     def run(self, ctx: BasePipelineContext):
@@ -112,11 +105,11 @@ class FuncStep(BaseStep, Generic[P, R]):
             f"function outputs and cannot be casted: {cast_size=} != {output_size=}"
         )
 
-    def _is_PipeVar_tuple(self, value: PipeVar[R] | tuple[PipeVar, ...]) -> bool:
-        return isinstance(value, tuple) and all(isinstance(f, PipeVar) for f in value)
+    def _is_outvar_tuple(self, value: OutVar[R] | tuple[OutVar, ...]) -> bool:
+        return isinstance(value, tuple) and all(isinstance(f, OutVar) for f in value)
 
-    def _is_PipeVar(self, value: PipeVar[R] | tuple[PipeVar, ...]) -> bool:
-        return isinstance(value, PipeVar)
+    def _is_outvar(self, value: OutVar[R] | tuple[OutVar, ...]) -> bool:
+        return isinstance(value, OutVar)
 
     def label(self) -> str:
         str_args = ", ".join(str(arg) for arg in self.args)
@@ -143,3 +136,9 @@ class FuncStep(BaseStep, Generic[P, R]):
                 return func
 
         return NewFuncStep  # type: ignore
+
+    def inputs(self) -> tuple[InVar, ...]:
+        return self._inputs
+
+    def outputs(self) -> tuple[OutVar, ...]:
+        return self._outputs

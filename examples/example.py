@@ -11,6 +11,9 @@ from tuyau.steps import FuncStep
 from tuyau.context import PipeVar
 from multiprocessing import Pool
 
+from tuyau.steps.base_step import StatusEnum
+from typing import get_origin
+
 
 def square(a: float) -> float:
     return a**2
@@ -23,30 +26,28 @@ def do_something_in_process(a: float, b: float) -> float:
 
 
 def main():
-    pipeline = Pipeline(ExampleContext, "Example Pipeline")
-
     context = ExampleContext(input_x=PipeVar(1.5), input_y=PipeVar(8), thread_count=2)
 
     SquareStep = FuncStep.new(do_something_in_process)
 
     square_step = SquareStep(
-        result_vars=context.result_func_step,
-        a=context.result_step5.T,
-        b=context.result_step6.T,
+        result_vars=context.result_func_step.as_output(),
+        a=context.result_step5.as_input().T,
+        b=context.result_step6.as_input().T,
     )
 
     node1 = PipeNode("Process node 1").add_steps(
         AdditionStep(
-            a_field=context.input_x,
-            b_field=context.input_y,
-            res_field=context.result_step1,
+            a_field=context.input_x.as_input(),
+            b_field=context.input_y.as_input(),
+            res_field=context.result_step1.as_output(),
             name="Step 1.1",
         ),
         LogStep(context.result_step1, name="Step 1.2"),
         MutliplyStep(
-            a_field=context.result_step1,
-            b_field=context.result_step1,
-            res_field=context.result_step1,
+            a_field=context.result_step1.as_input(),
+            b_field=context.result_step1.as_input(),
+            res_field=context.result_step1.as_output(),
             name="Step 1.3",
             comment="Square previous result",
         ),
@@ -57,27 +58,27 @@ def main():
 
     node3 = PipeNode(name="Process node 3").add_steps(
         AdditionStep(
-            a_field=context.input_x,
-            b_field=context.input_y,
-            res_field=context.result_step3,
+            a_field=context.input_x.as_input(),
+            b_field=context.input_y.as_input(),
+            res_field=context.result_step3.as_output(),
             name="Step 3.1",
         )
     )
 
     node4 = PipeNode("Process node 4").add_steps(
         MutliplyStep(
-            a_field=context.input_x,
-            b_field=context.input_x,
-            res_field=context.result_step4,
+            a_field=context.input_x.as_input(),
+            b_field=context.input_x.as_input(),
+            res_field=context.result_step4.as_output(),
             name="Step 4.1",
         )
     )
 
     node5 = PipeNode("Process node 5").add_steps(
         AdditionStep(
-            a_field=context.result_step3,
-            b_field=context.result_step4,
-            res_field=context.result_step5,
+            a_field=context.result_step3.as_input(),
+            b_field=context.result_step4.as_input(),
+            res_field=context.result_step5.as_output(),
             name="Step 5.1",
         ),
         LogStep(context.result_step5, name="result_step5"),
@@ -85,9 +86,9 @@ def main():
 
     node6 = PipeNode("Process node 6").add_steps(
         AdditionStep(
-            a_field=context.result_step1,
-            b_field=context.result_step5,
-            res_field=context.result_step6,
+            a_field=context.result_step1.as_input(),
+            b_field=context.result_step5.as_input(),
+            res_field=context.result_step6.as_output(),
             name="Step 6.1",
         ),
         LogStep(context.result_step6, name="result_step6"),
@@ -95,15 +96,24 @@ def main():
         LogStep(context.result_func_step, name="result_func_step"),
     )
 
-    (
-        pipeline.add_children_to(pipeline.root_node, node1, node2)
-        .add_children_to(node2, node3, node4)
-        .add_parents_to(node5, node3, node4)
-        .add_parents_to(node6, node5, node1)
-        .terminate_pipeline()
-    )
-
     directory = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
+
+    # Second syntax
+    pipeline = Pipeline(ExampleContext, "Example Pipeline")
+    pipeline.build(
+        (node1, node2),
+        (
+            node2 >> (node3 & node4)
+            # Some basic unnecessary conditions
+            | (
+                lambda: node2.status is StatusEnum.COMPLETE,
+                lambda: node2.status is not StatusEnum.ERROR,
+            )
+        ),
+        (node3 & node4) >> node5,
+        (node1 & node5) >> node6,
+    )
+    pipeline.validate()
 
     graph = pipeline.graph(preview=True)
     graph.render("example_preview", directory=directory, format="svg")

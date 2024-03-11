@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Generic, ParamSpec, TypeVar
 from enum import Flag, auto
-from tuyau.context import ContextT
+from tuyau.context import ContextT, InVar, OutVar
 
 
 P = ParamSpec("P")
@@ -13,10 +13,10 @@ class StatusEnum(Flag):
     RUNNING = auto()
     COMPLETE = auto()
     SKIPPED = auto()
+    CONDITION_FAILED = auto()
     ERROR = auto()
-
-
-STATUS_PASSED = StatusEnum.COMPLETE | StatusEnum.SKIPPED
+    OK = COMPLETE | SKIPPED
+    KO = ERROR | CONDITION_FAILED
 
 
 class BaseStep(ABC, Generic[ContextT]):
@@ -25,18 +25,22 @@ class BaseStep(ABC, Generic[ContextT]):
         StatusEnum.UNKNOWN: {"shape": "box", "color": "black", "style": "rounded"},
         StatusEnum.RUNNING: {
             "shape": "box",
-            "color": "dodgerblue4",
+            "color": "blue",
             "style": "rounded",
-            "bgcolor": "dodgerblue2",
         },
         StatusEnum.COMPLETE: {
             "shape": "box",
-            "color": "darkgreen",
+            "color": "green",
             "style": "rounded",
-            "bgcolor": "darkolivegreen3",
+            "bgcolor": "lightgreen",
         },
         StatusEnum.SKIPPED: {"shape": "box", "color": "grey", "style": "rounded"},
         StatusEnum.ERROR: {"shape": "box", "color": "red", "style": "rounded"},
+        StatusEnum.CONDITION_FAILED: {
+            "shape": "box",
+            "color": "orange",
+            "style": "rounded",
+        },
     }
     DEFAULT_STYLE: dict[str, str] = {}
     COMMENT = ""
@@ -89,4 +93,18 @@ class BaseStep(ABC, Generic[ContextT]):
         return (
             f"{self.__class__.__name__}: {self.name}"
             f"{'\n' if self.comment else ''}{self.comment}"
+        )
+
+    # TODO: adjust these methods depending on the usage (add recursive type checks?)
+    # Do not hesitate to reimplate in your classes to avoid parsing the obj dict and
+    # directly store your Input/Outputs in an object attribute
+
+    def inputs(self) -> tuple[InVar, ...]:
+        return tuple(
+            value for value in self.__dict__.values() if isinstance(value, InVar)
+        )
+
+    def outputs(self) -> tuple[OutVar, ...]:
+        return tuple(
+            value for value in self.__dict__.values() if isinstance(value, OutVar)
         )

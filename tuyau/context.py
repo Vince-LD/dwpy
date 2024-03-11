@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from threading import Lock
 from typing import (
     Generic,
@@ -21,6 +21,13 @@ class NoDefault:
 class PipeVar(Generic[T]):
     def __init__(self, value: T | type[NoDefault]) -> None:
         self.__value = value
+        self.__name: str = ""
+
+    def set_name(self, name: str):
+        self.__name = name
+
+    def get_name(self) -> str:
+        return self.__name
 
     def get(self) -> T:
         value = self.__value
@@ -58,12 +65,60 @@ class PipeVar(Generic[T]):
     def T(self) -> T:
         return cast(T, self)
 
+    def as_input(self) -> "InVar[T]":
+        return InVar(self)
 
-@dataclass(slots=True)
+    def as_output(self) -> "OutVar[T]":
+        return OutVar(self)
+
+    def as_inout(self) -> "InOutVar[T]":
+        return InOutVar(self)
+
+
+class _IOVar(Generic[T]):
+    def __init__(self, var: PipeVar[T]) -> None:
+        self._var = var
+
+    def as_pipevar(self) -> PipeVar[T]:
+        return self._var
+
+    @property
+    def T(self) -> T:
+        return cast(T, self._var)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self._var})"
+
+
+class InVar(_IOVar[T]):
+    def get(self) -> T:
+        return self._var.get()
+
+
+class OutVar(_IOVar[T]):
+    def set(self, value: T):
+        self._var.set(value)
+
+
+class InOutVar(InVar[T], OutVar[T]):
+    def get(self) -> T:
+        return self._var.get()
+
+    def set(self, value: T):
+        self._var.set(value)
+
+
+@dataclass
 class BasePipelineContext:
     thread_count: int = 4
     _thread_lock: Lock = field(init=False, repr=False, default_factory=Lock)
     _fields_: set[str] = field(init=False, repr=False, default_factory=set)
+
+    def __post_init__(self):
+        for field_ in fields(self):
+            value = getattr(self, field_.name)
+            if isinstance(value, PipeVar):
+                value.set_name(field_.name)
 
     def __enter__(self) -> Self:
         self._thread_lock.acquire()
