@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from threading import Lock
 from typing import (
     Generic,
@@ -21,6 +21,13 @@ class NoDefault:
 class PipeVar(Generic[T]):
     def __init__(self, value: T | type[NoDefault]) -> None:
         self.__value = value
+        self.__name: str = ""
+
+    def set_name(self, name: str):
+        self.__name = name
+
+    def get_name(self) -> str:
+        return self.__name
 
     def get(self) -> T:
         value = self.__value
@@ -101,11 +108,17 @@ class InOutVar(InVar[T], OutVar[T]):
         self._var.set(value)
 
 
-@dataclass(slots=True)
+@dataclass
 class BasePipelineContext:
     thread_count: int = 4
     _thread_lock: Lock = field(init=False, repr=False, default_factory=Lock)
     _fields_: set[str] = field(init=False, repr=False, default_factory=set)
+
+    def __post_init__(self):
+        for field_ in fields(self):
+            value = getattr(self, field_.name)
+            if isinstance(value, PipeVar):
+                value.set_name(field_.name)
 
     def __enter__(self) -> Self:
         self._thread_lock.acquire()

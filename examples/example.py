@@ -12,6 +12,7 @@ from tuyau.context import PipeVar
 from multiprocessing import Pool
 
 from tuyau.steps.base_step import StatusEnum
+from typing import get_origin
 
 
 def square(a: float) -> float:
@@ -98,8 +99,8 @@ def main():
     directory = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
 
     # Second syntax
-    pipeline2 = Pipeline(ExampleContext, "Example Pipeline")
-    pipeline2.build(
+    pipeline = Pipeline(ExampleContext, "Example Pipeline")
+    pipeline.build(
         (node1, node2),
         (
             node2 >> (node3 & node4)
@@ -112,13 +113,14 @@ def main():
         (node3 & node4) >> node5,
         (node1 & node5) >> node6,
     )
+    pipeline.validate()
 
-    graph = pipeline2.graph(preview=True)
+    graph = pipeline.graph(preview=True)
     graph.render("example_preview", directory=directory, format="svg")
     graph.render("example_preview", directory=directory, format="png")
 
-    pipeline2.execute(context)
-    graph = pipeline2.graph()
+    pipeline.execute(context)
+    graph = pipeline.graph()
     graph.render("example", directory=directory, format="svg")
     graph.render("example", directory=directory, format="png")
 

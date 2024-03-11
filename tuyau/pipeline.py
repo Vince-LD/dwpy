@@ -1,13 +1,15 @@
+from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
+import pprint
 import threading
 from functools import reduce
 from itertools import repeat
 import time
 from typing import Callable, Iterable, Optional, Self, TypeAlias, TypeVar, Union
-from tuyau.exceptions import ConditionError
+from tuyau.exceptions import ConditionError, InputOutputConflictError
 from tuyau.steps import BaseStep, StatusEnum, FinalStep, RootStep
 
-from tuyau.context import BasePipelineContext, ContextT
+from tuyau.context import BasePipelineContext, ContextT, PipeVar
 import logging
 
 # import asyncio
@@ -32,6 +34,12 @@ class PipeNode:
         self.update_run_flag()
         self._executed = threading.Event()
         self.conditions: list[ConditionExpr] = []
+        self.inputs: set[PipeVar] = set()
+        self.outputs: set[PipeVar] = set()
+        self.branch: set[PipeNode] = set()
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__} : {self.name}"
 
     def update_run_flag(self):
         required = max(len(self.parent_nodes) - 1, 0)
@@ -81,6 +89,10 @@ class PipeNode:
 
     def add_steps(self, *steps: BaseStep) -> Self:
         self.steps.extend(steps)
+        self.inputs.update(inp.as_pipevar() for step in steps for inp in step.inputs())
+        self.outputs.update(
+            inp.as_pipevar() for step in steps for inp in step.outputs()
+        )
         return self
 
     def add_child_nodes(self, *nodes: "ChildNode") -> Self:
@@ -258,6 +270,8 @@ class Pipeline:
         self._running_nodes: int = 0
         self.runtime_error: Optional[BaseException] = None
 
+        self.parallel_nodes: dict[PipeNode, set[PipeNode]] = {}
+
     def add_node(self, node: PipeNode):
         self.nodes.add(node)
 
@@ -365,24 +379,124 @@ class Pipeline:
         self.terminate_pipeline()
 
     def register_nodes_from(self, start_node: PipeNode):
-        self._map(start_node, lambda pl, node: pl.nodes.add(node), set())
+        self._map_once(start_node, lambda pl, node: pl.nodes.add(node))
+
+    def _compute_branches(self):
+        def add_branch(_: Pipeline, node: PipeNode):
+            for parent in node.parent_nodes:
+                node.branch.add(parent)
+                node.branch.update(parent.branch)
+
+        self.map_pipeline(add_branch)
+        # self.map_pipeline(
+        #     lambda _, node: node.branch.update(
+        #         n for parents in node.parent_nodes for n in parents.branch
+        #     )
+        # )
 
     # TODO maybe add map method to the PipeNode class directly
-    def map_pipeline(self, func: Callable[[Self, PipeNode], None]):
-        self._map(self.root_node, func, set())
+    def map_pipeline_once(self, func: Callable[[Self, PipeNode], None]):
+        self._map_once(self.root_node, func)
 
-    def _map(
+    def map_pipeline(self, func: Callable[[Self, PipeNode], None]):
+        self._map(self.root_node, func)
+
+    def _map_once(
         self,
         node: PipeNode,
         func: Callable[[Self, PipeNode], None],
-        visited: set[PipeNode],
     ):
-        func(self, node)
-        for child in node.child_nodes:
-            if child in visited:
+        visited = set()
+        queue = deque([node])
+        while queue:
+            node = queue.popleft()
+            if node in visited:
                 continue
-            visited.add(child)
-            self._map(child, func, visited)
+            func(self, node)
+            queue.extend(node.child_nodes)
+
+    def _map(self, node: PipeNode, func: Callable[[Self, PipeNode], None]):
+        queue = deque([node])
+        while queue:
+            node = queue.popleft()
+            func(self, node)
+            queue.extend(node.child_nodes)
+
+    def _compute_parallel_nodes(
+        self,
+    ):
+        parallel_nodes = self.parallel_nodes
+        i = 0
+        graph = tuple(self.nodes)
+        for node_i in graph:
+            for node_j in graph:
+                parll_nodes_i = parallel_nodes.setdefault(node_i, set())
+                if (
+                    len(node_i.parent_nodes) == 1
+                    and len((parent := next(iter(node_i.parent_nodes))).child_nodes)
+                    == 1
+                ):
+                    parll_nodes_i.add(parent)
+                    continue
+                parll_nodes_i = parallel_nodes.setdefault(node_i, set())
+
+                for node_j in graph:
+                    if node_i in node_j.branch or node_j in node_i.branch:
+                        continue
+                    i += 1
+                    parll_nodes_i.add(node_j)
+                    parll_nodes_j = parallel_nodes.setdefault(node_j, set())
+                    parll_nodes_j.add(node_i)
+
+    def validate(self):
+        self._compute_branches()
+        self._compute_parallel_nodes()
+        forbidden_inputs: dict[PipeVar, set[PipeNode]] = defaultdict(set)
+        forbidden_outputs: dict[PipeVar, set[PipeNode]] = defaultdict(set)
+        for ref_node, parll_nodes in self.parallel_nodes.items():
+            for parll_node in parll_nodes:
+                if parll_node is ref_node:
+                    continue
+                s_in = ref_node.inputs.intersection(parll_node.outputs)
+                for var in s_in:
+                    forbidden_inputs[var].update((parll_node, ref_node))
+                s_out = ref_node.inputs.intersection(parll_node.outputs)
+                for var in s_out:
+                    forbidden_outputs[var].update((parll_node, ref_node))
+
+        message_lines: list[str] = []
+        if forbidden_inputs:
+            message_lines.extend(
+                (
+                    "",
+                    "/!\\ Forbiden inputs",
+                    "Some intputs were used in a node while also used as outputs in "
+                    "parallel nodes:",
+                    pprint.pformat(
+                        {
+                            var.get_name(): tuple(node.name for node in nodes)
+                            for var, nodes in forbidden_inputs.items()
+                        }
+                    ),
+                )
+            )
+        if forbidden_outputs:
+            message_lines.extend(
+                (
+                    "",
+                    "/!\\ Forbiden outputs",
+                    "Some outputs were used in a node while also used as outputs in "
+                    "parallel nodes:",
+                    pprint.pformat(
+                        {
+                            var.get_name(): tuple(node.name for node in nodes)
+                            for var, nodes in forbidden_outputs.items()
+                        }
+                    ),
+                )
+            )
+        if message_lines:
+            raise InputOutputConflictError("\n".join(message_lines))
 
     def reset(self):
         raise NotImplementedError("The nodes must be reset (i.e. their locks)")

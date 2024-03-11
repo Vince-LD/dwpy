@@ -16,7 +16,7 @@ class ExampleInvalidInputsError(BasePipelineError):
         super().__init__(message)
 
 
-@dataclass(slots=True)
+@dataclass
 class ExampleContext(BasePipelineContext):
     input_x: PipeVar[float] = PipeVar.new_field(0.0)
     input_y: PipeVar[float] = PipeVar.new_field(0.0)
