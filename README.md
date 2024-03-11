@@ -2,10 +2,16 @@
 
 > In French, tuyaux means pipes
 
-A python library to build, validate and run simple, parallelized and blazingly fast pipelines using a graph structure!  
+A python library to build, validate and run simple, parallelized and blazingly fast pipelines using a graph structure!
+
+This library makes extensive use of type hinting and requires python 3.11 or newer. I highly recommand enabling your type-checker on your IDE and to use Pyright/Pylance (not tester with mypy) to have a more enjoyable experience. 
+
+<img src="https://media1.tenor.com/m/pqqewW40Bi8AAAAC/pacha-okay.gif" width="200" height="200"/>
 
 
+## Table of content
 - [Tuyaux - an easy and safe pipeline library 🚀](#tuyaux---an-easy-and-safe-pipeline-library-)
+  - [Table of content](#table-of-content)
   - [Examples](#examples)
     - [1. Create your Steps and Nodes 🧑‍💻](#1-create-your-steps-and-nodes-)
     - [2. Connect everything together and validate input/outputs 🔗](#2-connect-everything-together-and-validate-inputoutputs-)
