@@ -1,20 +1,28 @@
+from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
-
+import pprint
+import threading
 from functools import reduce
 from itertools import repeat
 import time
-from typing import Iterable, Optional, Self
-from tuyau.base_step import FinalStep, RootStep, BaseStep, StatusEnum, STATUS_PASSED
-from tuyau.context import BasePipelineContext, ContextT
+from typing import Callable, Iterable, Optional, Self, TypeAlias, TypeVar, Union
+from tuyau.exceptions import ConditionError, InputOutputConflictError
+from tuyau.steps import BaseStep, StatusEnum, FinalStep, RootStep
+
+from tuyau.context import BasePipelineContext, ContextT, PipeVar
 import logging
-from threading import Lock
+
+# import asyncio
 import graphviz
 
 logging.basicConfig(level=logging.DEBUG)
 
+ConditionExpr = Callable[[], bool]
+NodeOrNodeCompT = TypeVar("NodeOrNodeCompT", bound=Union["PipeNode", "NodeComp"])
+
 
 class PipeNode:
-    def __init__(self, name="") -> None:
+    def __init__(self, name="Node") -> None:
         self.name = name
         self.steps: list[BaseStep] = []
         self.parent_nodes: set[PipeNode] = set()
@@ -22,47 +30,88 @@ class PipeNode:
         self._status = StatusEnum.UNKNOWN
         self._error: Optional[BaseException] = None
         self._id = id(self)
+        self.all_parents_executed: threading.Semaphore
+        self.update_run_flag()
+        self._executed = threading.Event()
+        self.conditions: list[ConditionExpr] = []
+        self.inputs: set[PipeVar] = set()
+        self.outputs: set[PipeVar] = set()
+        self.branch: set[PipeNode] = set()
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__} : {self.name}"
+
+    def update_run_flag(self):
+        required = max(len(self.parent_nodes) - 1, 0)
+        self.all_parents_executed = threading.Semaphore(required)
 
     def run(self, ctx: BasePipelineContext):
-        logging.info(
-            f"{", ".join([n.name+ ":" + str(n.status) for n in self.parent_nodes])} => {self.name}"
-        )
-        if not self._all_previous_complete():
-            logging.info(
-                f"{self.name} cannot run yet, "
-                f"{", ".join([n.name+ ":" + str(n.status) for n in self.parent_nodes])}"
-            )
+        if self.all_parents_executed.acquire(blocking=False):
+            self._status = StatusEnum.UNKNOWN
             return
 
-        step = self.first_step
-        try:
-            for step in self.steps:
-                step.run(ctx)
-        except BaseException as e:
-            self._error = e
-            self._status = StatusEnum.ERROR
-            step.error()
+        if self.executed:
             return
+
+        # If just one condition is false, the step should error out, skip step
+        if not self.check_conditions:
+            self._executed.set()
+            return
+
+        for step in self.steps:
+            try:
+                step.run(ctx)
+                if not bool(step.status & StatusEnum.OK):
+                    self._status = StatusEnum.ERROR
+                    self._error = step.error
+                    logging.exception(step.error)
+                    return
+            except Exception as e:
+                step.errored(e)
+                self._error = e
+                self._status = StatusEnum.ERROR
+                return
+
+        self._executed.set()
         self._status = StatusEnum.COMPLETE
+
+    def check_conditions(self) -> bool:
+        exec_conditions = [condition() for condition in self.conditions]
+        is_conditions_ok = all(exec_conditions)
+
+        if not is_conditions_ok:
+            self._status = StatusEnum.CONDITION_FAILED
+            self._error = ConditionError(
+                f"One or more condition are not met: {exec_conditions}"
+            )
+
+        return is_conditions_ok
 
     def add_steps(self, *steps: BaseStep) -> Self:
         self.steps.extend(steps)
+        self.inputs.update(inp.as_pipevar() for step in steps for inp in step.inputs())
+        self.outputs.update(
+            inp.as_pipevar() for step in steps for inp in step.outputs()
+        )
         return self
 
-    def add_child_nodes(self, *nodes: Self) -> Self:
+    def add_child_nodes(self, *nodes: "ChildNode") -> Self:
         self.child_nodes.update(nodes)
+        for node in nodes:
+            node.update_run_flag()
         return self
 
-    def add_parent_nodes(self, *nodes: Self) -> Self:
+    def add_parent_nodes(self, *nodes: "ParentNode") -> Self:
         self.parent_nodes.update(nodes)
+        self.update_run_flag()
         return self
 
     def __str__(self) -> str:
-        return f"{' -> '.join([step.__class__.__name__ for step in self.steps])}"
+        return f"{self.name}: {' -> '.join([step.name for step in self.steps])}"
 
     def _all_previous_complete(self) -> bool:
         return reduce(
-            lambda bool_, node: bool_ and bool(node.status & STATUS_PASSED),
+            lambda bool_, node: bool_ and bool(node.status & StatusEnum.OK),
             self.parent_nodes,
             True,
         )
@@ -86,6 +135,10 @@ class PipeNode:
     @property
     def id(self) -> int:
         return self._id
+
+    @property
+    def executed(self) -> int:
+        return self._executed.is_set()
 
     def view(self, graph: graphviz.Digraph) -> graphviz.Digraph:
         sg = graphviz.Digraph(f"cluster_{self._id}")
@@ -122,8 +175,77 @@ class PipeNode:
     def __hash__(self) -> int:
         return self.id
 
-    def __eq__(self, __value: object) -> bool:
-        return isinstance(__value, self.__class__) and __value.id == self.id
+    # TODO refactor theses dunder methods and the corresponding ones in NodeComp
+    # to avoid repetitions
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, self.__class__) and other.id == self.id
+
+    def __rshift__(self, other: "NodeOrNodeCompT") -> "NodeOrNodeCompT":
+        match other:
+            case PipeNode():
+                self.add_child_nodes(other)
+                other.add_parent_nodes(self)
+            case NodeComp():
+                self.add_child_nodes(*other.nodes)
+                for node in other.nodes:
+                    node.add_parent_nodes(self)
+        return other
+
+    def __and__(self, other: Self) -> "NodeComp":
+        return NodeComp((self, other))
+
+    def __or__(self, other: ConditionExpr | tuple[ConditionExpr]) -> Self:
+        match other:
+            case [*_]:
+                self.conditions.extend(other)
+            case _:
+                self.conditions.append(other)
+        return self
+
+
+ParentNode: TypeAlias = PipeNode
+ChildNode: TypeAlias = PipeNode
+
+
+class NodeComp:
+    def __init__(
+        self,
+        nodes: Iterable[PipeNode],
+    ) -> None:
+        self.nodes: list[PipeNode] = list(nodes)
+
+    # TODO refactor theses dunder methods and the corresponding ones in PipeNode
+    # to avoid repetitions
+    def __and__(self, other: PipeNode):
+        match other:
+            case PipeNode():
+                self.nodes.append(other)
+            case NodeComp():
+                self.nodes.extend(other.nodes)
+        return self
+
+    def __rshift__(self, other: NodeOrNodeCompT) -> NodeOrNodeCompT:
+        match other:
+            case PipeNode():
+                for step in self.nodes:
+                    step.add_child_nodes(other)
+                    other.add_parent_nodes(*self.nodes)
+            case NodeComp():
+                for step in self.nodes:
+                    step.add_child_nodes(*other.nodes)
+                    for node in other.nodes:
+                        node.add_parent_nodes(*self.nodes)
+        return other
+
+    def __or__(self, other: ConditionExpr | tuple[ConditionExpr, ...]):
+        match other:
+            case [*_]:
+                for step in self.nodes:
+                    step.conditions.extend(other)
+            case _:
+                for step in self.nodes:
+                    step.conditions.append(other)
+        return self
 
 
 class Pipeline:
@@ -138,19 +260,20 @@ class Pipeline:
 
         self.root_node = PipeNode(self.name)
         self.root_node.add_steps(RootStep(context_class))
-
-        self.final_node = PipeNode("")
+        self.final_node = PipeNode(name="FINAL NODE")
         self.final_node.add_steps(FinalStep(context_class))
         self.add_nodes(self.root_node, self.final_node)
 
-        self.last_node = PipeNode("Pipeline end")
-        self._lock = Lock()
-        self._remaining_nodes: int = 0
+        self.default_thread_count = 4
+
+        self.remaining_nodes = threading.Semaphore(len(self.nodes))
         self._running_nodes: int = 0
         self.runtime_error: Optional[BaseException] = None
 
-    # def add_node(self, node: PipeNode):
-    #     self.nodes.add(node)
+        self.parallel_nodes: dict[PipeNode, set[PipeNode]] = {}
+
+    def add_node(self, node: PipeNode):
+        self.nodes.add(node)
 
     def add_nodes(self, *nodes: PipeNode) -> Self:
         self.nodes.update(nodes)
@@ -170,13 +293,13 @@ class Pipeline:
         self.nodes.add(parent_node)
         return self
 
-    # def add_child_to(self, parent_node: PipeNode, child_node: PipeNode) -> Self:
-    #     parent_node.add_child_nodes(child_node)
-    #     child_node.add_parent_nodes(parent_node)
+    def add_child_to(self, parent_node: PipeNode, child_node: PipeNode) -> Self:
+        parent_node.add_child_nodes(child_node)
+        child_node.add_parent_nodes(parent_node)
 
-    #     self.nodes.add(child_node)
-    #     self.nodes.add(parent_node)
-    #     return self
+        self.nodes.add(child_node)
+        self.nodes.add(parent_node)
+        return self
 
     def add_parents_to(
         self,
@@ -192,34 +315,36 @@ class Pipeline:
         self.nodes.add(child_node)
         return self
 
-    # def add_parent_to(
-    #     self,
-    #     child_node: PipeNode,
-    #     parent_node: PipeNode,
-    # ) -> Self:
-    #     parent_node.add_child_nodes(child_node)
-    #     child_node.add_parent_nodes(parent_node)
+    def add_parent_to(
+        self,
+        child_node: PipeNode,
+        parent_node: PipeNode,
+    ) -> Self:
+        parent_node.add_child_nodes(child_node)
+        child_node.add_parent_nodes(parent_node)
 
-    #     self.nodes.add(child_node)
-    #     self.nodes.add(parent_node)
-    #     return self
-
-    def connect_final_node(self) -> Self:
-        for node in self.nodes.difference({self.final_node}):
-            if len(node.child_nodes) == 0:
-                node.add_child_nodes(self.final_node)
-                self.final_node.add_parent_nodes(node)
-
+        self.nodes.add(child_node)
+        self.nodes.add(parent_node)
         return self
 
+    def start_pipeline_with(self, *nodes: PipeNode) -> Self:
+        self.add_children_to(self.root_node, *nodes)
+        return self
+
+    def terminate_pipeline(self):
+        for node in self.nodes.difference({self.final_node}):
+            if len(node.child_nodes) == 0:
+                self.add_child_to(node, self.final_node)
+
     def execute(self, ctx: BasePipelineContext):
-        self.remaining_nodes = len(self.nodes)
+        self.remaining_nodes = threading.Semaphore(len(self.nodes))
         self.running_nodes = 0
-        with ThreadPoolExecutor(max_workers=ctx.thread_count) as executor:
-            self._parse_run(ctx, self.root_node, executor)
+        thread_count = ctx.thread_count or self.default_thread_count
+        with ThreadPoolExecutor(thread_count) as executor:
+            executor.submit(self._parse_run, ctx, self.root_node, executor)
             while self._keep_running():
-                print("keep_running")
                 time.sleep(1)
+
         if self.runtime_error is not None:
             logging.exception(self.runtime_error)
 
@@ -228,39 +353,153 @@ class Pipeline:
     ):
         if node.status is not StatusEnum.UNKNOWN:
             return
-        node.run(ctx)
-        self.remaining_nodes -= 1
 
-        if node.status is StatusEnum.ERROR:
-            self.runtime_error = node.error
+        if not bool(node.status & StatusEnum.OK):
+            node.run(ctx)
+
+        if not node.executed:
             return
 
-        executor.map(
-            self._parse_run,
-            repeat(ctx),
-            node.child_nodes,
-            repeat(executor),
-        )
+        if bool(node.status & StatusEnum.OK):
+            self.remaining_nodes.acquire(blocking=False)
 
-    @property
-    def remaining_nodes(self) -> int:
-        with self._lock:
-            return self._remaining_nodes
-
-    @remaining_nodes.setter
-    def remaining_nodes(self, value: int):
-        with self._lock:
-            self._remaining_nodes = value
+        elif node.status is StatusEnum.KO:
+            self.runtime_error = node.error
+            return
+        executor.map(self._parse_run, repeat(ctx), node.child_nodes, repeat(executor))
 
     def _keep_running(self):
-        print(self.remaining_nodes, self.runtime_error)
-        return (
-            self.remaining_nodes > 0 and self.runtime_error is None
-            # and self.running_nodes > 0
-        )
+        return not self.final_node.executed and self.runtime_error is None
 
-    def build(self):
-        pass
+    def build(
+        self, start_nodes: PipeNode | Iterable[PipeNode], *args: PipeNode | NodeComp
+    ):
+        self.start_pipeline_with(*start_nodes)
+        self.register_nodes_from(self.root_node)
+        self.terminate_pipeline()
+
+    def register_nodes_from(self, start_node: PipeNode):
+        self._map_once(start_node, lambda pl, node: pl.nodes.add(node))
+
+    def _compute_branches(self):
+        def add_branch(_: Pipeline, node: PipeNode):
+            for parent in node.parent_nodes:
+                node.branch.add(parent)
+                node.branch.update(parent.branch)
+
+        self.map_pipeline(add_branch)
+        # self.map_pipeline(
+        #     lambda _, node: node.branch.update(
+        #         n for parents in node.parent_nodes for n in parents.branch
+        #     )
+        # )
+
+    # TODO maybe add map method to the PipeNode class directly
+    def map_pipeline_once(self, func: Callable[[Self, PipeNode], None]):
+        self._map_once(self.root_node, func)
+
+    def map_pipeline(self, func: Callable[[Self, PipeNode], None]):
+        self._map(self.root_node, func)
+
+    def _map_once(
+        self,
+        node: PipeNode,
+        func: Callable[[Self, PipeNode], None],
+    ):
+        visited = set()
+        queue = deque([node])
+        while queue:
+            node = queue.popleft()
+            if node in visited:
+                continue
+            func(self, node)
+            queue.extend(node.child_nodes)
+
+    def _map(self, node: PipeNode, func: Callable[[Self, PipeNode], None]):
+        queue = deque([node])
+        while queue:
+            node = queue.popleft()
+            func(self, node)
+            queue.extend(node.child_nodes)
+
+    def _compute_parallel_nodes(
+        self,
+    ):
+        parallel_nodes = self.parallel_nodes
+        i = 0
+        graph = tuple(self.nodes)
+        for node_i in graph:
+            for node_j in graph:
+                parll_nodes_i = parallel_nodes.setdefault(node_i, set())
+                if (
+                    len(node_i.parent_nodes) == 1
+                    and len((parent := next(iter(node_i.parent_nodes))).child_nodes)
+                    == 1
+                ):
+                    parll_nodes_i.add(parent)
+                    continue
+                parll_nodes_i = parallel_nodes.setdefault(node_i, set())
+
+                for node_j in graph:
+                    if node_i in node_j.branch or node_j in node_i.branch:
+                        continue
+                    i += 1
+                    parll_nodes_i.add(node_j)
+                    parll_nodes_j = parallel_nodes.setdefault(node_j, set())
+                    parll_nodes_j.add(node_i)
+
+    def validate(self):
+        self._compute_branches()
+        self._compute_parallel_nodes()
+        forbidden_inputs: dict[PipeVar, set[PipeNode]] = defaultdict(set)
+        forbidden_outputs: dict[PipeVar, set[PipeNode]] = defaultdict(set)
+        for ref_node, parll_nodes in self.parallel_nodes.items():
+            for parll_node in parll_nodes:
+                if parll_node is ref_node:
+                    continue
+                s_in = ref_node.inputs.intersection(parll_node.outputs)
+                for var in s_in:
+                    forbidden_inputs[var].update((parll_node, ref_node))
+                s_out = ref_node.inputs.intersection(parll_node.outputs)
+                for var in s_out:
+                    forbidden_outputs[var].update((parll_node, ref_node))
+
+        message_lines: list[str] = []
+        if forbidden_inputs:
+            message_lines.extend(
+                (
+                    "",
+                    "/!\\ Forbiden inputs",
+                    "Some intputs were used in a node while also used as outputs in "
+                    "parallel nodes:",
+                    pprint.pformat(
+                        {
+                            var.get_name(): tuple(node.name for node in nodes)
+                            for var, nodes in forbidden_inputs.items()
+                        }
+                    ),
+                )
+            )
+        if forbidden_outputs:
+            message_lines.extend(
+                (
+                    "",
+                    "/!\\ Forbiden outputs",
+                    "Some outputs were used in a node while also used as outputs in "
+                    "parallel nodes:",
+                    pprint.pformat(
+                        {
+                            var.get_name(): tuple(node.name for node in nodes)
+                            for var, nodes in forbidden_outputs.items()
+                        }
+                    ),
+                )
+            )
+        if message_lines:
+            raise InputOutputConflictError("\n".join(message_lines))
+
+    def reset(self):
+        raise NotImplementedError("The nodes must be reset (i.e. their locks)")
 
     def graph(self, preview=True) -> graphviz.Digraph:
         pipeline_name = f"{self.name}_preview" if preview else self.name

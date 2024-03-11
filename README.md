@@ -4,102 +4,138 @@ A python library to make simple, parallelized pipelines using a graph structure!
 
 ## Examples
 
-### 1. Simply create your pipeline 🧑‍💻
+### 1. Create your Steps and Nodes 🧑‍💻
 
 The complete example code can be found [here](./examples/example.py) and the classes are [here](./examples/example_utils.py).
 
 ```python
-pipeline = Pipeline(ExampleContext, "Example Pipeline")
+def square(a: float) -> float:
+    return a**2
 
-context = ExampleContext(
-    input_x=Var(1.5),
-    input_y=Var(8),
-)
 
-node1 = PipeNode("Process node 1").add_steps(
-    AddStep(
-        x_field=context.input_x,
-        y_field=context.input_y,
-        res_field=context.result_step1,
-        name="Step 1.1",
-    ),
-    LogStep(context.result_step1, name="Step 1.2"),
-    MutliplyStep(
-        x_field=context.result_step1,
-        y_field=context.result_step1,
-        res_field=context.result_step1,
-        name="Step 1.3",
-        comment="Square previous result",
-    ),
-    LogStep(context.result_step1, name="Step 1.2"),
-)
+def do_something_in_process(a: float, b: float) -> float:
+    pool = Pool(2)
+    result = pool.map(square, (a, b))
+    return sum(result)
 
-node2 = PipeNode("Process node 2").add_steps(SkipStep("Skip step 2"))
 
-node3 = PipeNode(name="Process node 3").add_steps(
-    AddStep(
-        x_field=context.input_x,
-        y_field=context.input_y,
-        res_field=context.result_step3,
-        name="Step 3.1",
+def main():
+    context = ExampleContext(input_x=PipeVar(1.5), input_y=PipeVar(8), thread_count=2)
+
+    SquareStep = FuncStep.new(do_something_in_process)
+
+    square_step = SquareStep(
+        result_vars=context.result_func_step.as_output(),
+        a=context.result_step5.as_input().T,
+        b=context.result_step6.as_input().T,
     )
-)
 
-node4 = PipeNode("Process node 4").add_steps(
-    MutliplyStep(
-        x_field=context.input_x,
-        y_field=context.input_x,
-        res_field=context.result_step4,
-        name="Step 4.1",
+    node1 = PipeNode("Process node 1").add_steps(
+        AdditionStep(
+            a_field=context.input_x.as_input(),
+            b_field=context.input_y.as_input(),
+            res_field=context.result_step1.as_output(),
+            name="Step 1.1",
+        ),
+        LogStep(context.result_step1, name="Step 1.2"),
+        MutliplyStep(
+            a_field=context.result_step1.as_input(),
+            b_field=context.result_step1.as_input(),
+            res_field=context.result_step1.as_output(),
+            name="Step 1.3",
+            comment="Square previous result",
+        ),
+        LogStep(context.result_step1, name="Step 1.2"),
     )
-)
 
-node5 = PipeNode("Process node ").add_steps(
-    AddStep(
-        x_field=context.result_step3,
-        y_field=context.result_step4,
-        res_field=context.result_step5,
-        name="Step 5.1",
+    node2 = PipeNode("Process node 2").add_steps(SkipStep("Skip step 2"))
+
+    node3 = PipeNode(name="Process node 3").add_steps(
+        AdditionStep(
+            a_field=context.input_x.as_input(),
+            b_field=context.input_y.as_input(),
+            res_field=context.result_step3.as_output(),
+            name="Step 3.1",
+        )
     )
-)
 
-node6 = PipeNode("Final process node").add_steps(
-    MutliplyStep(
-        x_field=context.result_step3,
-        y_field=context.result_step5,
-        res_field=context.result_step6,
-        name="Step 6.1",
-    ),
-    LogStep(context.result_step6, name="Final logging!"),
-)
+    node4 = PipeNode("Process node 4").add_steps(
+        MutliplyStep(
+            a_field=context.input_x.as_input(),
+            b_field=context.input_x.as_input(),
+            res_field=context.result_step4.as_output(),
+            name="Step 4.1",
+        )
+    )
 
-(
-    pipeline
-    .add_children_to(pipeline.root_node, node1, node2)
-    .add_children_to(node2, node3, node4)
-    .add_parents_to(node5, node3, node4)
-    .add_parents_to(node6, node5, node1)
-    .connect_final_node()
-)
+    node5 = PipeNode("Process node 5").add_steps(
+        AdditionStep(
+            a_field=context.result_step3.as_input(),
+            b_field=context.result_step4.as_input(),
+            res_field=context.result_step5.as_output(),
+            name="Step 5.1",
+        ),
+        LogStep(context.result_step5, name="result_step5"),
+    )
+
+    node6 = PipeNode("Process node 6").add_steps(
+        AdditionStep(
+            a_field=context.result_step1.as_input(),
+            b_field=context.result_step5.as_input(),
+            res_field=context.result_step6.as_output(),
+            name="Step 6.1",
+        ),
+        LogStep(context.result_step6, name="result_step6"),
+        square_step,
+        LogStep(context.result_func_step, name="result_func_step"),
+    )
+
+    directory = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
 ```
 
-### 2. Preview 🕵️
+### 2. Connect everything together and validate input/outputs 🔗
 
 ```python
-directory = ...
-graph = pipeline.graph(preview=True)
-graph.render("example_preview", directory=directory, format="png")
+
+# Cool syntaxe
+
+    # Second syntax
+    pipeline = Pipeline(ExampleContext, "Example Pipeline")
+    pipeline.build(
+        (node1, node2),
+        (
+            node2 >> (node3 & node4)
+            # Some basic unnecessary conditions
+            | (
+                lambda: node2.status is StatusEnum.COMPLETE,
+                lambda: node2.status is not StatusEnum.ERROR,
+            )
+        ),
+        (node3 & node4) >> node5,
+        (node1 & node5) >> node6,
+    )
+    # Raise an exception if some inputs are used as outputs in parallel branches
+    # or if the same output is used in multiple parallel branches
+    pipeline.validate()
+```
+
+### 3. Preview 🕵️
+
+```python
+    graph = pipeline.graph(preview=True)
+    graph.render("example_preview", directory=directory, format="svg")
+    graph.render("example_preview", directory=directory, format="png")
 ```
 
 ![example preview](./data/example_preview.svg)
 
-### 3. Execute and check the result! 🎉🎉🎉
+### 4. Execute and check the result! 🎉🎉🎉
 
 ```python
-pipeline.execute(context)
-directory = ...
-graph = pipeline.graph()
-graph.render("example", directory=directory, format="png")
+    pipeline.execute(context)
+    graph = pipeline.graph()
+    graph.render("example", directory=directory, format="svg")
+    graph.render("example", directory=directory, format="png")
 ```
 
 ![example result](./data/example.svg)
