@@ -1,6 +1,18 @@
-# Tuyau 🚀
+# Tuyaux: an easy and safe pipeline library 🚀
 
-A python library to make simple, parallelized pipelines using a graph structure! 
+> Tuyaux means pipes in french
+
+
+A python library to build, validate and run simple, parallelized and blazingly fast pipelines using a graph structure! 
+
+
+- [Tuyaux: an easy and safe pipeline library 🚀](#tuyaux-an-easy-and-safe-pipeline-library-)
+  - [Examples](#examples)
+    - [1. Create your Steps and Nodes 🧑‍💻](#1-create-your-steps-and-nodes-)
+    - [2. Connect everything together and validate input/outputs 🔗](#2-connect-everything-together-and-validate-inputoutputs-)
+    - [3. Preview 🕵️](#3-preview-️)
+    - [4. Execute and check the result! 🎉🎉🎉](#4-execute-and-check-the-result-)
+
 
 ## Examples
 

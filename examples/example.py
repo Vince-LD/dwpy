@@ -1,5 +1,5 @@
 import os
-from tuyau.pipeline import Pipeline, PipeNode
+from tuyaux.pipeline import Pipeline, PipeNode
 from example_utils import (
     ExampleContext,
     AdditionStep,
@@ -7,12 +7,11 @@ from example_utils import (
     LogStep,
     SkipStep,
 )
-from tuyau.steps import FuncStep
-from tuyau.context import PipeVar
+from tuyaux.steps import FuncStep
+from tuyaux.context import PipeVar
 from multiprocessing import Pool
 
-from tuyau.steps.base_step import StatusEnum
-from typing import get_origin
+from tuyaux.steps.base_step import StatusEnum
 
 
 def square(a: float) -> float:

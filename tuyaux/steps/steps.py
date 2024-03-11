@@ -1,8 +1,8 @@
 from abc import abstractmethod
 from typing import Any, Callable, Generic, ParamSpec, Self, TypeVar
-from tuyau.context import BasePipelineContext, ContextT
-from tuyau.steps.base_step import BaseStep
-from tuyau.context import PipeVar, InVar, OutVar
+from tuyaux.context import BasePipelineContext, ContextT
+from tuyaux.steps.base_step import BaseStep
+from tuyaux.context import PipeVar, InVar, OutVar
 
 
 P = ParamSpec("P")

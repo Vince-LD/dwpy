@@ -2,12 +2,12 @@ from dataclasses import dataclass
 import time
 from typing import Any, Optional
 
-from tuyau.steps.base_step import BaseStep
-from tuyau.context import BasePipelineContext, InVar, OutVar, PipeVar, NoDefault
+from tuyaux.steps.base_step import BaseStep
+from tuyaux.context import BasePipelineContext, InVar, OutVar, PipeVar, NoDefault
 
 import logging
 
-from tuyau.exceptions import BasePipelineError
+from tuyaux.exceptions import BasePipelineError
 
 
 class ExampleInvalidInputsError(BasePipelineError):

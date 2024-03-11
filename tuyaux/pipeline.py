@@ -6,10 +6,10 @@ from functools import reduce
 from itertools import repeat
 import time
 from typing import Callable, Iterable, Optional, Self, TypeAlias, TypeVar, Union
-from tuyau.exceptions import ConditionError, InputOutputConflictError
-from tuyau.steps import BaseStep, StatusEnum, FinalStep, RootStep
+from tuyaux.exceptions import ConditionError, InputOutputConflictError
+from tuyaux.steps import BaseStep, StatusEnum, FinalStep, RootStep
 
-from tuyau.context import BasePipelineContext, ContextT, PipeVar
+from tuyaux.context import BasePipelineContext, ContextT, PipeVar
 import logging
 
 # import asyncio

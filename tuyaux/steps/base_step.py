@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Generic, ParamSpec, TypeVar
 from enum import Flag, auto
-from tuyau.context import ContextT, InVar, OutVar
+from tuyaux.context import ContextT, InVar, OutVar
 
 
 P = ParamSpec("P")
