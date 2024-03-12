@@ -120,7 +120,7 @@ def main():
     # Second syntax
     pipeline = Pipeline(ExampleContext, "Example Pipeline")
     pipeline.build(
-        (node1, node2),
+        pipeline.root_node >> (node1 & node2),
         (
             node2 >> (node3 & node4)
             # Some basic unnecessary conditions
