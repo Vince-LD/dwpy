@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 
 [project]
@@ -40,3 +40,7 @@ keywords = [
 Repository = "https://github.com/Vince-LD/Tuyaux"
 Issues = "https://github.com/Vince-LD/Tuyaux/issues"
 project = "https://github.com/users/Vince-LD/projects/1"
+
+
+[tool.hatch.build.targets.wheel]
+packages = ["tuyaux"]
