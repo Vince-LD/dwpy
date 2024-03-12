@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "Tuyaux"
+version = "0.1.0"
+authors = [{ name = "Vincent Le Du" }]
+description = "Tuyaux is a python library to build, validate and run simple and parallelized pipelines using a DAG (Directed Acyclic Graph)."
+readme = "README.md"
+license = { file = "LICENSE" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Utilities",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: OS Independent",
+    "Operating System :: POSIX",
+    "Operating System :: Unix",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = ["graphviz"]
+requires-python = ">= 3.11"
+keywords = [
+    "Pipeline",
+    "Utils",
+    "Parallelized",
+    "Safe",
+    "Graph",
+    "Tree",
+    "multithreaded",
+]
+
+
+[project.urls]
+Repository = "https://github.com/Vince-LD/Tuyaux"
+Issues = "https://github.com/Vince-LD/Tuyaux/issues"
+project = "https://github.com/users/Vince-LD/projects/1"
