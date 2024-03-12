@@ -6,7 +6,7 @@ from functools import reduce
 from itertools import repeat
 import time
 from typing import Callable, Iterable, Optional, Self, TypeAlias, TypeVar, Union
-from tuyaux.exceptions import ConditionError, InputOutputConflictError
+from tuyaux.exceptions import ConditionError, CycleError, InputOutputConflictError
 from tuyaux.steps import BaseStep, StatusEnum, FinalStep, RootStep
 
 from tuyaux.context import BasePipelineContext, ContextT, PipeVar
@@ -270,7 +270,7 @@ class Pipeline:
         self._running_nodes: int = 0
         self.runtime_error: Optional[BaseException] = None
 
-        self.parallel_nodes: dict[PipeNode, set[PipeNode]] = {}
+        self.parallel_nodes: dict[PipeNode, set[PipeNode]] = defaultdict(set)
 
     def add_node(self, node: PipeNode):
         self.nodes.add(node)
@@ -335,6 +335,7 @@ class Pipeline:
         for node in self.nodes.difference({self.final_node}):
             if len(node.child_nodes) == 0:
                 self.add_child_to(node, self.final_node)
+        self._compute_branches()
 
     def execute(self, ctx: BasePipelineContext):
         self.remaining_nodes = threading.Semaphore(len(self.nodes))
@@ -372,11 +373,16 @@ class Pipeline:
         return not self.final_node.executed and self.runtime_error is None
 
     def build(
-        self, start_nodes: PipeNode | Iterable[PipeNode], *args: PipeNode | NodeComp
+        self,
+        *args: PipeNode | NodeComp,
+        check_io: bool = True,
+        check_cycles: bool = True,
     ):
-        self.start_pipeline_with(*start_nodes)
+        # self.start_pipeline_with(*start_nodes)
         self.register_nodes_from(self.root_node)
         self.terminate_pipeline()
+        if check_io:
+            self.validate_io()
 
     def register_nodes_from(self, start_node: PipeNode):
         self._map_once(start_node, lambda pl, node: pl.nodes.add(node))
@@ -386,13 +392,13 @@ class Pipeline:
             for parent in node.parent_nodes:
                 node.branch.add(parent)
                 node.branch.update(parent.branch)
+            if node in node.branch:
+                raise CycleError(
+                    "The following nodes are part of cycles which are "
+                    f"node allowed: {node.name}"
+                )
 
         self.map_pipeline(add_branch)
-        # self.map_pipeline(
-        #     lambda _, node: node.branch.update(
-        #         n for parents in node.parent_nodes for n in parents.branch
-        #     )
-        # )
 
     # TODO maybe add map method to the PipeNode class directly
     def map_pipeline_once(self, func: Callable[[Self, PipeNode], None]):
@@ -406,12 +412,13 @@ class Pipeline:
         node: PipeNode,
         func: Callable[[Self, PipeNode], None],
     ):
-        visited = set()
+        visited: set[PipeNode] = set()
         queue = deque([node])
         while queue:
             node = queue.popleft()
             if node in visited:
                 continue
+            visited.add(node)
             func(self, node)
             queue.extend(node.child_nodes)
 
@@ -427,29 +434,25 @@ class Pipeline:
     ):
         parallel_nodes = self.parallel_nodes
         i = 0
-        graph = tuple(self.nodes)
+        graph = self.nodes
+        remaning_nodes_to_visit = self.nodes.copy()
         for node_i in graph:
-            for node_j in graph:
-                parll_nodes_i = parallel_nodes.setdefault(node_i, set())
-                if (
-                    len(node_i.parent_nodes) == 1
-                    and len((parent := next(iter(node_i.parent_nodes))).child_nodes)
-                    == 1
-                ):
-                    parll_nodes_i.add(parent)
+            remaning_nodes_to_visit.remove(node_i)
+            if (
+                len(node_i.parent_nodes) == 1
+                and len((parent := next(iter(node_i.parent_nodes))).child_nodes) == 1
+            ):
+                parallel_nodes[node_i].add(parent)
+                continue
+
+            for node_j in remaning_nodes_to_visit:
+                if node_i in node_j.branch or node_j in node_i.branch:
                     continue
-                parll_nodes_i = parallel_nodes.setdefault(node_i, set())
+                i += 1
+                parallel_nodes[node_i].add(node_j)
+                parallel_nodes[node_j].add(node_i)
 
-                for node_j in graph:
-                    if node_i in node_j.branch or node_j in node_i.branch:
-                        continue
-                    i += 1
-                    parll_nodes_i.add(node_j)
-                    parll_nodes_j = parallel_nodes.setdefault(node_j, set())
-                    parll_nodes_j.add(node_i)
-
-    def validate(self):
-        self._compute_branches()
+    def validate_io(self):
         self._compute_parallel_nodes()
         forbidden_inputs: dict[PipeVar, set[PipeNode]] = defaultdict(set)
         forbidden_outputs: dict[PipeVar, set[PipeNode]] = defaultdict(set)
@@ -497,6 +500,17 @@ class Pipeline:
             )
         if message_lines:
             raise InputOutputConflictError("\n".join(message_lines))
+
+    # def validate_cycles(self):
+    #     cycles: set[PipeNode] = set()
+    #     for node in self.nodes:
+    #         if node in node.branch:
+    #             cycles.add(node)
+    #     if cycles:
+    #         raise CycleError(
+    #             "The following nodes are part of cycles which are "
+    #             f"node allowed: {'\n'.join(node.name for node in cycles)}"
+    #         )
 
     def reset(self):
         raise NotImplementedError("The nodes must be reset (i.e. their locks)")

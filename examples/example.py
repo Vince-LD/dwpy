@@ -100,7 +100,7 @@ def main():
     # Second syntax
     pipeline = Pipeline(ExampleContext, "Example Pipeline")
     pipeline.build(
-        (node1, node2),
+        pipeline.root_node >> (node1 & node2),
         (
             node2 >> (node3 & node4)
             # Some basic unnecessary conditions
@@ -111,8 +111,8 @@ def main():
         ),
         (node3 & node4) >> node5,
         (node1 & node5) >> node6,
+        check_io=True,
     )
-    pipeline.validate()
 
     graph = pipeline.graph(preview=True)
     graph.render("example_preview", directory=directory, format="svg")
