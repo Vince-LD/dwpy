@@ -327,7 +327,7 @@ class Pipeline:
         self.nodes.add(parent_node)
         return self
 
-    def start_pipeline_with(self, *nodes: PipeNode) -> Self:
+    def start_nodes(self, *nodes: PipeNode) -> Self:
         self.add_children_to(self.root_node, *nodes)
         return self
 
@@ -376,9 +376,8 @@ class Pipeline:
         self,
         *args: PipeNode | NodeComp,
         check_io: bool = True,
-        check_cycles: bool = True,
     ):
-        # self.start_pipeline_with(*start_nodes)
+        # self.start_nodes(*start_nodes)
         self.register_nodes_from(self.root_node)
         self.terminate_pipeline()
         if check_io:

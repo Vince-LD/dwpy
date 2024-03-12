@@ -114,16 +114,16 @@ def main():
 ### 2. Connect everything together and validate input/outputs 🔗
 
 ```python
-
-# Cool syntaxe
-
-    # Second syntax
     pipeline = Pipeline(ExampleContext, "Example Pipeline")
+
+    # The build method construst some data structures in the pipeline, checks for cycles and can check for input/output usage errors (recommended).
+    # It also automatically connects all the childless nodes to the final node 
+    # You MUST use this method to ensure your have a functional pipeline
     pipeline.build(
         pipeline.root_node >> (node1 & node2),
         (
             node2 >> (node3 & node4)
-            # Some basic unnecessary conditions
+            # Some basic non-sense conditions
             | (
                 lambda: node2.status is StatusEnum.COMPLETE,
                 lambda: node2.status is not StatusEnum.ERROR,
@@ -132,9 +132,12 @@ def main():
         (node3 & node4) >> node5,
         (node1 & node5) >> node6,
     )
-    # Raise an exception if some inputs are used as outputs in parallel branches
-    # or if the same output is used in multiple parallel branches
-    pipeline.validate()
+
+    # another option is to use the following syntax if you do not like calling the root_node
+    pipeline.start_nodes(node1, node2).build(
+        node2 >> (node3 & node4), 
+        ...
+        )
 ```
 
 ### 3. Preview 🕵️
