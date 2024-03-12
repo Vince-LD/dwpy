@@ -2,6 +2,8 @@
 
 > In French, tuyaux means pipes
 
+This repository is under active developpment. Breaking changes may occur on a regular basis. Feel free to share ideas and suggestions. This repository will be updated to add discussions and the todolist I am working on.
+
 ## Table of content
 - [Table of content](#table-of-content)
 - [Introduction](#introduction)
@@ -14,11 +16,13 @@
 
 ## Introduction
 
-A python library to build, validate and run simple, parallelized and blazingly fast pipelines using a DAG structure (Directed Acyclic Graph)!
+A python library to build, validate and run simple, parallelized *and blazingly fast* pipelines using a DAG (Directed Acyclic Graph)!
 
-This library makes extensive use of type hinting and requires python 3.11 or newer. I highly recommand enabling your type-checker in your IDE and to use Pyright/Pylance (not tested with mypy) to have a more enjoyable experience. 
+This library makes extensive use of type hinting and requires python 3.11 or newer. I highly recommand enabling your type-checker in your IDE and to use Pyright/Pylance (not tested with mypy) to have the most enjoyable experience. 
 
 <img src="https://media1.tenor.com/m/pqqewW40Bi8AAAAC/pacha-okay.gif" width="200" height="200"/>
+
+This library is pure python but requires [GraphViz](https://pypi.org/project/graphviz/) to be installed (python library and executable). The goal is to split graphviz functions in their optional submodules. This would allow you to use this lib with vanilla python and/or to implement your own graph viewer. 
 
 ## Examples
 
