@@ -7,7 +7,7 @@ from typing import (
     cast,
     final,
 )
-from tuyau.exceptions import NoDefaultError
+from tuyaux.exceptions import NoDefaultError
 
 ContextT = TypeVar("ContextT", bound="BasePipelineContext")
 T = TypeVar("T")
