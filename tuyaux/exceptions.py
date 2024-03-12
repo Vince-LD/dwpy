@@ -12,3 +12,6 @@ class ConditionError(BasePipelineError):
 
 class InputOutputConflictError(BasePipelineError):
     pass
+
+class CycleError(BasePipelineError):
+    pass

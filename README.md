@@ -2,22 +2,27 @@
 
 > In French, tuyaux means pipes
 
-A python library to build, validate and run simple, parallelized and blazingly fast pipelines using a graph structure!
+This repository is under active developpment. Breaking changes may occur on a regular basis. Feel free to share ideas and suggestions. This repository will be updated to add discussions and the todolist I am working on.
 
-This library makes extensive use of type hinting and requires python 3.11 or newer. I highly recommand enabling your type-checker in your IDE and to use Pyright/Pylance (not tested with mypy) to have a more enjoyable experience. 
+## Table of content
+- [Table of content](#table-of-content)
+- [Introduction](#introduction)
+- [Examples](#examples)
+  - [1. Create your Steps and Nodes 🧑‍💻](#1-create-your-steps-and-nodes-)
+  - [2. Connect everything together and validate input/outputs 🔗](#2-connect-everything-together-and-validate-inputoutputs-)
+  - [3. Preview 🕵️](#3-preview-️)
+  - [4. Execute and check the result! 🎉🎉🎉](#4-execute-and-check-the-result-)
+
+
+## Introduction
+
+A python library to build, validate and run simple, parallelized *and blazingly fast* pipelines using a DAG (Directed Acyclic Graph)!
+
+This library makes extensive use of type hinting and requires python 3.11 or newer. I highly recommand enabling your type-checker in your IDE and to use Pyright/Pylance (not tested with mypy) to have the most enjoyable experience. 
 
 <img src="https://media1.tenor.com/m/pqqewW40Bi8AAAAC/pacha-okay.gif" width="200" height="200"/>
 
-
-## Table of content
-- [Tuyaux - an easy and safe pipeline library 🚀](#tuyaux---an-easy-and-safe-pipeline-library-)
-  - [Table of content](#table-of-content)
-  - [Examples](#examples)
-    - [1. Create your Steps and Nodes 🧑‍💻](#1-create-your-steps-and-nodes-)
-    - [2. Connect everything together and validate input/outputs 🔗](#2-connect-everything-together-and-validate-inputoutputs-)
-    - [3. Preview 🕵️](#3-preview-️)
-    - [4. Execute and check the result! 🎉🎉🎉](#4-execute-and-check-the-result-)
-
+This library is pure python but requires [GraphViz](https://pypi.org/project/graphviz/) to be installed (python library and executable). The goal is to split graphviz functions in their optional submodules. This would allow you to use this lib with vanilla python and/or to implement your own graph viewer. 
 
 ## Examples
 
@@ -113,16 +118,16 @@ def main():
 ### 2. Connect everything together and validate input/outputs 🔗
 
 ```python
-
-# Cool syntaxe
-
-    # Second syntax
     pipeline = Pipeline(ExampleContext, "Example Pipeline")
+
+    # The build method construst some data structures in the pipeline, checks for cycles and can check for input/output usage errors (recommended).
+    # It also automatically connects all the childless nodes to the final node 
+    # You MUST use this method to ensure your have a functional pipeline
     pipeline.build(
-        (node1, node2),
+        pipeline.root_node >> (node1 & node2),
         (
             node2 >> (node3 & node4)
-            # Some basic unnecessary conditions
+            # Some basic non-sense conditions
             | (
                 lambda: node2.status is StatusEnum.COMPLETE,
                 lambda: node2.status is not StatusEnum.ERROR,
@@ -131,9 +136,12 @@ def main():
         (node3 & node4) >> node5,
         (node1 & node5) >> node6,
     )
-    # Raise an exception if some inputs are used as outputs in parallel branches
-    # or if the same output is used in multiple parallel branches
-    pipeline.validate()
+
+    # another option is to use the following syntax if you do not like calling the root_node
+    pipeline.start_nodes(node1, node2).build(
+        node2 >> (node3 & node4), 
+        ...
+        )
 ```
 
 ### 3. Preview 🕵️
