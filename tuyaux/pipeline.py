@@ -423,10 +423,15 @@ class Pipeline:
 
     def _map(self, node: PipeNode, func: Callable[[Self, PipeNode], None]):
         queue = deque([node])
+        count: dict[PipeNode, int] = {
+            n: max(len(n.parent_nodes), 1) for n in self.nodes
+        }
         while queue:
             node = queue.popleft()
             func(self, node)
-            queue.extend(node.child_nodes)
+            if count[node] >= 1:
+                count[node] -= 1
+                queue.extend(node.child_nodes)
 
     def _compute_parallel_nodes(
         self,
