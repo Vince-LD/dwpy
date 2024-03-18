@@ -168,7 +168,7 @@ class ShellStep(BaseStep):
         )
 
         self._outputs: tuple[OutVar] = tuple(
-            filter(lambda a: isinstance(a, InVar), self._command.arg_values())
+            filter(lambda a: isinstance(a, OutVar), self._command.arg_values())
         )
 
         if len(self._outputs) > 0:
@@ -184,6 +184,8 @@ class ShellStep(BaseStep):
             self._command.check()
         except Exception as e:
             self.errored(e)
+            return
+        self.completed()
 
     def inputs(self) -> tuple[InVar, ...]:
         return self._inputs
