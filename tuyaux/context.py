@@ -100,6 +100,9 @@ class InVar(_IOVar[T]):
     def __str__(self) -> str:
         return self._var.__str__()
 
+    def get(self) -> T:
+        return self._var.get()
+
 
 class OutVar(_IOVar[T]):
     def set(self, value: T):
