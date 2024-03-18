@@ -1,9 +1,11 @@
 from abc import abstractmethod
-from typing import Any, Callable, Generic, ParamSpec, Self, TypeVar
+from typing import Any, Callable, Generic, Optional, ParamSpec, Self, TypeVar
 from tuyaux.context import BasePipelineContext, ContextT
+from tuyaux.exceptions import ShellStepContainsOutVarError
 from tuyaux.steps.base_step import BaseStep
 from tuyaux.context import PipeVar, InVar, OutVar
 
+from commander.command import Command, CommandArg, ExpectedResult
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -136,6 +138,52 @@ class FuncStep(BaseStep, Generic[P, R]):
                 return func
 
         return NewFuncStep  # type: ignore
+
+    def inputs(self) -> tuple[InVar, ...]:
+        return self._inputs
+
+    def outputs(self) -> tuple[OutVar, ...]:
+        return self._outputs
+
+
+NotOutVar = TypeVar("NotOutVar")
+
+
+class ShellStep(BaseStep):
+    def __init__(
+        self,
+        command: str,
+        arguments: Optional[list[CommandArg[NotOutVar]]] = None,
+        expected: Optional[list[ExpectedResult]] = None,
+        shell: bool = False,
+        name: str | None = None,
+        comment: str = "",
+    ) -> None:
+        super().__init__(name, comment)
+        self._command = Command(command=command, arguments=arguments, expect=expected)
+        self.shell = shell
+
+        self._inputs: tuple[InVar] = tuple(
+            filter(lambda a: isinstance(a, InVar), self._command.arg_values())
+        )
+
+        self._outputs: tuple[OutVar] = tuple(
+            filter(lambda a: isinstance(a, InVar), self._command.arg_values())
+        )
+
+        if len(self._outputs) > 0:
+            raise ShellStepContainsOutVarError(
+                "ShellStep contains was given the following OutVar: "
+                f"{', '.join(repr(var) for var in self._outputs)}. "
+                "A ShellStep can only be given Inputs."
+            )
+
+    def run(self, ctx: BasePipelineContext):
+        try:
+            self._command.execute(shell=self.shell)
+            self._command.check()
+        except Exception as e:
+            self.errored(e)
 
     def inputs(self) -> tuple[InVar, ...]:
         return self._inputs

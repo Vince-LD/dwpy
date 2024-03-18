@@ -35,7 +35,7 @@ class PipeVar(Generic[T]):
             raise NoDefaultError(
                 "Cannot get a value that was not initialized (=NoDefault). "
                 f"If a {self.__class__.__name__} is inititalized with the value "
-                f"{NoDefault.__class__.__name__}, you cannot get it until method "
+                f"{NoDefault.__name__}, you cannot get it until method "
                 "PipeVar.set([new_value]) is called."
             )
         return value
@@ -56,6 +56,9 @@ class PipeVar(Generic[T]):
         )
 
     def __repr__(self) -> str:
+        return str(self.__value)
+
+    def __str__(self) -> str:
         return str(self.__value)
 
     def type(self) -> type[T]:
@@ -89,23 +92,28 @@ class _IOVar(Generic[T]):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._var})"
 
+    def __str__(self) -> str:
+        return self._var.__str__()
+
 
 class InVar(_IOVar[T]):
-    def get(self) -> T:
-        return self._var.get()
+    def __str__(self) -> str:
+        return self._var.__str__()
 
 
 class OutVar(_IOVar[T]):
     def set(self, value: T):
         self._var.set(value)
 
+    def __str__(self) -> str:
+        raise NotImplementedError(
+            "OutVar.__str__() method not implemented for OutVar as it can allow to get"
+            " the wrapped value."
+        )
+
 
 class InOutVar(InVar[T], OutVar[T]):
-    def get(self) -> T:
-        return self._var.get()
-
-    def set(self, value: T):
-        self._var.set(value)
+    pass
 
 
 @dataclass

@@ -15,3 +15,6 @@ class InputOutputConflictError(BasePipelineError):
 
 class CycleError(BasePipelineError):
     pass
+
+class ShellStepContainsOutVarError(BasePipelineError):
+    pass
