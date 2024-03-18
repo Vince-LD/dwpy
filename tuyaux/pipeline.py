@@ -54,7 +54,7 @@ class PipeNode:
             return
 
         # If just one condition is false, the step should error out, skip step
-        if not self.check_conditions:
+        if not self.check_conditions():
             self._executed.set()
             return
 
@@ -367,6 +367,7 @@ class Pipeline:
         elif node.status is StatusEnum.KO:
             self.runtime_error = node.error
             return
+
         executor.map(self._parse_run, repeat(ctx), node.child_nodes, repeat(executor))
 
     def _keep_running(self):
