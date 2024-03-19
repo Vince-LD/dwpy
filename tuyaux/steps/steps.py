@@ -5,7 +5,7 @@ from tuyaux.exceptions import ShellStepContainsOutVarError
 from tuyaux.steps.base_step import BaseStep
 from tuyaux.context import PipeVar, InVar, OutVar
 
-from commander.command import Command, CommandArg, ExpectedResult
+from commander.command import Command, AbstractArg, AbstractExpectedResult
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -153,8 +153,8 @@ class ShellStep(BaseStep):
     def __init__(
         self,
         command: str,
-        arguments: Optional[list[CommandArg[NotOutVar]]] = None,
-        expected: Optional[list[ExpectedResult]] = None,
+        arguments: Optional[list[AbstractArg[NotOutVar]]] = None,
+        expected: Optional[list[AbstractExpectedResult]] = None,
         shell: bool = False,
         name: str | None = None,
         comment: str = "",
