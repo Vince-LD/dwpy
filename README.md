@@ -128,7 +128,7 @@ def main():
         (
             node2 >> (node3 & node4)
             # Some basic non-sense conditions
-            | (
+            // (
                 lambda: node2.status is StatusEnum.COMPLETE,
                 lambda: node2.status is not StatusEnum.ERROR,
             )

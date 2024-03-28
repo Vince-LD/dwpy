@@ -25,7 +25,7 @@ def do_something_in_process(a: float, b: float) -> float:
 
 
 def main():
-    context = ExampleContext(input_x=PipeVar(1.5), input_y=PipeVar(8), thread_count=2)
+    context = ExampleContext(input_x=PipeVar(1.5), input_y=PipeVar(8), thread_count=4)
 
     SquareStep = FuncStep.new(do_something_in_process)
 
@@ -101,27 +101,24 @@ def main():
 
     # The build method construst some data structures in the pipeline, checks for cycles
     # and can check for input/output usage errors (recommended).
-    # It also automatically connects all the childless nodes to the final node
+    # It also automatically connects all the orphan nodes to the root node and all
+    # the childless nodes to the final node.
     # You MUST use this method to ensure your have a functional pipeline
     pipeline.build(
         (
             # pipeline.root_node >> (node1 & node2),
-            node2 >> (node3 & node4)
-            # Some basic non-sense conditions
-            | (
+            node2
+            >> (node3 & node4).if_(
                 lambda: node2.status is StatusEnum.COMPLETE,
                 lambda: node2.status is not StatusEnum.ERROR,
             )
         ),
-        (node3 & node4) >> node5,
+        (node3 & node4) >> node5.if_(lambda: node3.status is StatusEnum.COMPLETE),
         (node1 & node5) >> node6,
     )
 
-    # another option is to use the following syntax if you do not like calling the root_node
-    # pipeline.start_nodes(node1, node2).build(
-    #     node2 >> (node3 & node4),
-    #     ...
-    #     )
+    for node in pipeline.nodes:
+        print(node.name, "->", [n.name for n in node.child_nodes])
 
     graph = pipeline.graph(preview=True)
     graph.render("example_preview", directory=directory, format="svg")

@@ -200,13 +200,17 @@ class PipeNode:
     def __and__(self, other: Self) -> "NodeComp":
         return NodeComp((self, other))
 
-    def __or__(self, other: ConditionExpr | tuple[ConditionExpr]) -> Self:
+    def __mod__(self, other: ConditionExpr | tuple[ConditionExpr]) -> "NodeComp":
         match other:
             case [*_]:
                 self.conditions.extend(other)
             case _:
                 self.conditions.append(other)
-        return self
+        return NodeComp((self,))
+
+    def if_(self, *conditions: ConditionExpr) -> "NodeComp":
+        self.conditions.extend(conditions)
+        return NodeComp((self,))
 
 
 ParentNode: TypeAlias = PipeNode
@@ -222,7 +226,7 @@ class NodeComp:
 
     # TODO refactor theses dunder methods and the corresponding ones in PipeNode
     # to avoid repetitions
-    def __and__(self, other: PipeNode):
+    def __and__(self, other: PipeNode) -> Self:
         match other:
             case PipeNode():
                 self.nodes.append(other)
@@ -230,7 +234,7 @@ class NodeComp:
                 self.nodes.extend(other.nodes)
         return self
 
-    def __rshift__(self, other: Union["NodeComp", PipeNode]) -> "NodeComp":
+    def __rshift__(self, other: Union["NodeComp", PipeNode]) -> Self:
         match other:
             case PipeNode() as pipe_node:
                 for step in self.nodes:
@@ -245,7 +249,7 @@ class NodeComp:
                 self.nodes.extend(other.nodes)
         return self
 
-    def __or__(self, other: ConditionExpr | tuple[ConditionExpr, ...]):
+    def __mod__(self, other: ConditionExpr | tuple[ConditionExpr, ...]) -> Self:
         match other:
             case [*_]:
                 for step in self.nodes:
@@ -253,6 +257,11 @@ class NodeComp:
             case _:
                 for step in self.nodes:
                     step.conditions.append(other)
+        return self
+
+    def if_(self, *conditions: ConditionExpr) -> Self:
+        for node in self.nodes:
+            node.conditions.extend(conditions)
         return self
 
 
@@ -342,7 +351,7 @@ class Pipeline:
         return self
 
     def _terminate_pipeline(self):
-        for node in self.nodes.difference(self.pipeline_ends):
+        for node in self.nodes.difference({self.final_node}):
             if len(node.child_nodes) == 0:
                 self.add_child_to(node, self.final_node)
         self._compute_branches()
@@ -399,7 +408,7 @@ class Pipeline:
 
         self._connect_starting_nodes()
         self._terminate_pipeline()
-        self.register_nodes_from(self.root_node)
+        # self.register_nodes_from(self.root_node)
         if check_io:
             self.validate_io()
 
