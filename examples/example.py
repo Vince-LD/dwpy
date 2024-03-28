@@ -104,8 +104,8 @@ def main():
     # It also automatically connects all the childless nodes to the final node
     # You MUST use this method to ensure your have a functional pipeline
     pipeline.build(
-        pipeline.root_node >> (node1 & node2),
         (
+            # pipeline.root_node >> (node1 & node2),
             node2 >> (node3 & node4)
             # Some basic non-sense conditions
             | (

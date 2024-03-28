@@ -12,6 +12,8 @@ from tuyaux.steps import BaseStep, StatusEnum, FinalStep, RootStep
 from tuyaux.context import BasePipelineContext, ContextT, PipeVar
 import logging
 
+from uuid import UUID, uuid4
+
 # import asyncio
 import graphviz
 
@@ -29,7 +31,8 @@ class PipeNode:
         self.child_nodes: set[PipeNode] = set()
         self._status = StatusEnum.UNKNOWN
         self._error: Optional[BaseException] = None
-        self._id = id(self)
+        self._id = uuid4()
+        self._int_id = self._id.int
         self.all_parents_executed: threading.Semaphore
         self.update_run_flag()
         self._executed = threading.Event()
@@ -133,7 +136,7 @@ class PipeNode:
         return self._error
 
     @property
-    def id(self) -> int:
+    def id(self) -> UUID:
         return self._id
 
     @property
@@ -173,22 +176,25 @@ class PipeNode:
         return graph
 
     def __hash__(self) -> int:
-        return self.id
+        return self._int_id
 
     # TODO refactor theses dunder methods and the corresponding ones in NodeComp
     # to avoid repetitions
     def __eq__(self, other: object) -> bool:
         return isinstance(other, self.__class__) and other.id == self.id
 
-    def __rshift__(self, other: "NodeOrNodeCompT") -> "NodeOrNodeCompT":
+    def __rshift__(self, other: Union["PipeNode", "NodeComp"]) -> "NodeComp":
         match other:
-            case PipeNode():
+            case PipeNode() as pipe_node:
                 self.add_child_nodes(other)
-                other.add_parent_nodes(self)
-            case NodeComp():
-                self.add_child_nodes(*other.nodes)
-                for node in other.nodes:
+                pipe_node.add_parent_nodes(self)
+                other = NodeComp((self, other))
+            case NodeComp() as node_comp:
+                self.add_child_nodes(*node_comp.nodes)
+                for node in node_comp.nodes:
                     node.add_parent_nodes(self)
+                node_comp.nodes.append(self)
+
         return other
 
     def __and__(self, other: Self) -> "NodeComp":
@@ -224,18 +230,20 @@ class NodeComp:
                 self.nodes.extend(other.nodes)
         return self
 
-    def __rshift__(self, other: NodeOrNodeCompT) -> NodeOrNodeCompT:
+    def __rshift__(self, other: Union["NodeComp", PipeNode]) -> "NodeComp":
         match other:
-            case PipeNode():
+            case PipeNode() as pipe_node:
                 for step in self.nodes:
-                    step.add_child_nodes(other)
+                    step.add_child_nodes(pipe_node)
                     other.add_parent_nodes(*self.nodes)
+                self.nodes.append(pipe_node)
             case NodeComp():
                 for step in self.nodes:
                     step.add_child_nodes(*other.nodes)
                     for node in other.nodes:
                         node.add_parent_nodes(*self.nodes)
-        return other
+                self.nodes.extend(other.nodes)
+        return self
 
     def __or__(self, other: ConditionExpr | tuple[ConditionExpr, ...]):
         match other:
@@ -263,6 +271,8 @@ class Pipeline:
         self.final_node = PipeNode(name="FINAL NODE")
         self.final_node.add_steps(FinalStep(context_class))
         self.add_nodes(self.root_node, self.final_node)
+
+        self.pipeline_ends = {self.root_node, self.final_node}
 
         self.default_thread_count = 4
 
@@ -331,8 +341,8 @@ class Pipeline:
         self.add_children_to(self.root_node, *nodes)
         return self
 
-    def terminate_pipeline(self):
-        for node in self.nodes.difference({self.final_node}):
+    def _terminate_pipeline(self):
+        for node in self.nodes.difference(self.pipeline_ends):
             if len(node.child_nodes) == 0:
                 self.add_child_to(node, self.final_node)
         self._compute_branches()
@@ -373,14 +383,23 @@ class Pipeline:
     def _keep_running(self):
         return not self.final_node.executed and self.runtime_error is None
 
+    def _connect_starting_nodes(self):
+        for node in self.nodes.difference(self.pipeline_ends):
+            if len(node.parent_nodes) == 0:
+                self.add_child_to(self.root_node, node)
+                print(f"{self.root_node} >> {node}")
+
     def build(
         self,
-        *args: PipeNode | NodeComp,
+        *node_comps: NodeComp,
         check_io: bool = True,
     ):
-        # self.start_nodes(*start_nodes)
+        for node_comp in node_comps:
+            self.add_nodes(*node_comp.nodes)
+
+        self._connect_starting_nodes()
+        self._terminate_pipeline()
         self.register_nodes_from(self.root_node)
-        self.terminate_pipeline()
         if check_io:
             self.validate_io()
 
@@ -505,17 +524,6 @@ class Pipeline:
             )
         if message_lines:
             raise InputOutputConflictError("\n".join(message_lines))
-
-    # def validate_cycles(self):
-    #     cycles: set[PipeNode] = set()
-    #     for node in self.nodes:
-    #         if node in node.branch:
-    #             cycles.add(node)
-    #     if cycles:
-    #         raise CycleError(
-    #             "The following nodes are part of cycles which are "
-    #             f"node allowed: {'\n'.join(node.name for node in cycles)}"
-    #         )
 
     def reset(self):
         raise NotImplementedError("The nodes must be reset (i.e. their locks)")
